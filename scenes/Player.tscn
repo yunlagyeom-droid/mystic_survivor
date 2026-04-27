@@ -1,0 +1,34 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/player.gd" id="player_script"]
+[ext_resource type="Texture2D" path="res://assets/art/player_mage_sprite_sheet.png" id="player_texture"]
+[ext_resource type="Texture2D" path="res://assets/art/mage_blink_vfx_sheet.png" id="blink_vfx"]
+[ext_resource type="Texture2D" path="res://assets/art/mage_barrier_vfx_sheet.png" id="barrier_vfx"]
+
+[sub_resource type="CapsuleShape2D" id="player_shape"]
+radius = 19.0
+height = 56.0
+
+[node name="Player" type="CharacterBody2D"]
+collision_layer = 1
+collision_mask = 2
+script = ExtResource("player_script")
+blink_vfx_texture = ExtResource("blink_vfx")
+barrier_vfx_texture = ExtResource("barrier_vfx")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -8)
+scale = Vector2(0.42, 0.42)
+texture = ExtResource("player_texture")
+hframes = 8
+vframes = 8
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 8)
+shape = SubResource("player_shape")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+enabled = true
+zoom = Vector2(0.9, 0.9)
+position_smoothing_enabled = true
+position_smoothing_speed = 8.0

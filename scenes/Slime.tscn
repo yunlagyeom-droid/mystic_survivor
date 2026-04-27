@@ -1,0 +1,31 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/slime.gd" id="slime_script"]
+[ext_resource type="Texture2D" path="res://assets/art/slime.png" id="slime_texture"]
+
+[sub_resource type="CircleShape2D" id="body_shape"]
+radius = 29.0
+
+[sub_resource type="CircleShape2D" id="attack_shape"]
+radius = 38.0
+
+[node name="Slime" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("slime_script")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -8)
+scale = Vector2(0.07, 0.07)
+texture = ExtResource("slime_texture")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("body_shape")
+
+[node name="AttackArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackArea"]
+shape = SubResource("attack_shape")
+

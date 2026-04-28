@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/slime.gd" id="slime_script"]
-[ext_resource type="Texture2D" path="res://assets/art/slime.png" id="slime_texture"]
+[ext_resource type="Texture2D" path="res://assets/monsters/slime/sprites/slime.png" id="slime_texture"]
 
 [sub_resource type="CircleShape2D" id="body_shape"]
 radius = 29.0
@@ -28,4 +28,3 @@ collision_mask = 1
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="AttackArea"]
 shape = SubResource("attack_shape")
-

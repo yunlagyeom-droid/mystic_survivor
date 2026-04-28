@@ -5,9 +5,9 @@
 [ext_resource type="PackedScene" path="res://scenes/Slime.tscn" id="slime_scene"]
 [ext_resource type="PackedScene" path="res://scenes/Fireball.tscn" id="fireball_scene"]
 [ext_resource type="PackedScene" path="res://scenes/ExperienceGem.tscn" id="gem_scene"]
-[ext_resource type="Texture2D" path="res://assets/art/stage_grass_fantasy.png" id="stage_texture"]
-[ext_resource type="Texture2D" path="res://assets/art/player_mage_ultimate_character.png" id="ultimate_cutin"]
-[ext_resource type="Texture2D" path="res://assets/art/ultimate_starfall_vfx_sheet.png" id="ultimate_vfx"]
+[ext_resource type="Texture2D" path="res://assets/maps/grass_fantasy/backgrounds/stage_grass_fantasy.png" id="stage_texture"]
+[ext_resource type="Texture2D" path="res://assets/players/mage/portraits/player_mage_ultimate_character.png" id="ultimate_cutin"]
+[ext_resource type="Texture2D" path="res://assets/players/mage/skills/ultimate/ultimate_starfall_vfx_sheet.png" id="ultimate_vfx"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("main_script")

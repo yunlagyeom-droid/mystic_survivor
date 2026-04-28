@@ -2,19 +2,24 @@ extends Control
 
 const Catalog := preload("res://scripts/character_catalog.gd")
 
-const CARD_SIZE := Vector2(154.0, 700.0)
-const CARD_GAP := 14
-const LEFT_PANEL_WIDTH := 850.0
-const DETAIL_PANEL_WIDTH := 920.0
+const CARD_SIZE := Vector2(162.0, 690.0)
+const CARD_GAP := 15
+const LEFT_PANEL_WIDTH := 870.0
+const DETAIL_PANEL_WIDTH := 900.0
+const DETAIL_INFO_TOP := 64.0
+const DETAIL_INFO_BOTTOM := 112.0
 
 var characters: Array = []
 var selected_index := 0
 var card_buttons: Array[Button] = []
 var card_name_labels: Array[Label] = []
-var card_symbol_labels: Array[Label] = []
+var card_symbol_controls: Array = []
+var card_frame_overlays: Array = []
+var background_image
+var fade_layer
 var card_scroll: ScrollContainer
-var detail_panel: PanelContainer
-var detail_image
+var detail_panel: Control
+var detail_frame
 var detail_info_panel: PanelContainer
 var detail_name_label: Label
 var detail_subtitle_label: Label
@@ -86,6 +91,355 @@ class FocusedTexture:
 		draw_texture_rect_region(texture, Rect2(Vector2.ZERO, size), Rect2(source_position, source_size), tint)
 
 
+class ShowcaseFade:
+	extends Control
+
+	var theme_color := Color(0.48, 0.68, 1.0)
+	var accent_color := Color(1.0, 0.78, 0.34)
+	var info_rect := Rect2()
+	var info_side := "left"
+
+
+	func set_fade_data(new_theme_color: Color, new_accent_color: Color, new_info_rect: Rect2, new_info_side: String) -> void:
+		theme_color = new_theme_color
+		accent_color = new_accent_color
+		info_rect = new_info_rect
+		info_side = new_info_side
+		queue_redraw()
+
+
+	func _draw() -> void:
+		if size.x <= 0.0 or size.y <= 0.0:
+			return
+
+		var full_rect := Rect2(Vector2.ZERO, size)
+		draw_rect(full_rect, Color(0.0, 0.0, 0.0, 0.12), true)
+		_draw_horizontal_gradient(Rect2(0.0, 0.0, size.x * 0.56, size.y), Color.BLACK, 0.66, 0.18, 44)
+		_draw_vertical_gradient(Rect2(0.0, 0.0, size.x, size.y * 0.22), Color.BLACK, 0.56, 0.0, 24)
+		_draw_vertical_gradient(Rect2(0.0, size.y * 0.76, size.x, size.y * 0.24), Color.BLACK, 0.0, 0.58, 24)
+
+		if info_rect.size.x > 0.0 and info_rect.size.y > 0.0:
+			var safe_rect := info_rect.grow_individual(84.0, 52.0, 132.0, 58.0)
+			if info_side == "right":
+				_draw_horizontal_gradient(safe_rect, Color.BLACK, 0.08, 0.76, 44)
+			else:
+				_draw_horizontal_gradient(safe_rect, Color.BLACK, 0.76, 0.08, 44)
+			draw_rect(info_rect.grow(18.0), Color(0.0, 0.0, 0.0, 0.16), true)
+			_draw_info_frame(info_rect, accent_color)
+
+		draw_rect(full_rect.grow(-6.0), Color(0.82, 0.62, 0.34, 0.5), false, 1.0)
+		draw_rect(full_rect.grow(-14.0), Color(0.82, 0.62, 0.34, 0.2), false, 1.0)
+		_draw_title_ornaments()
+		_draw_hint_ornaments()
+		_draw_corner_ornaments()
+
+
+	func _draw_horizontal_gradient(rect: Rect2, color: Color, left_alpha: float, right_alpha: float, steps: int) -> void:
+		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			return
+
+		var strip_width := rect.size.x / float(steps)
+		for index in range(steps):
+			var t := float(index) / float(maxi(steps - 1, 1))
+			var alpha := lerpf(left_alpha, right_alpha, t)
+			var strip_rect := Rect2(
+				Vector2(rect.position.x + strip_width * float(index), rect.position.y),
+				Vector2(ceilf(strip_width) + 1.0, rect.size.y)
+			)
+			draw_rect(strip_rect, Color(color.r, color.g, color.b, alpha), true)
+
+
+	func _draw_vertical_gradient(rect: Rect2, color: Color, top_alpha: float, bottom_alpha: float, steps: int) -> void:
+		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			return
+
+		var strip_height := rect.size.y / float(steps)
+		for index in range(steps):
+			var t := float(index) / float(maxi(steps - 1, 1))
+			var alpha := lerpf(top_alpha, bottom_alpha, t)
+			var strip_rect := Rect2(
+				Vector2(rect.position.x, rect.position.y + strip_height * float(index)),
+				Vector2(rect.size.x, ceilf(strip_height) + 1.0)
+			)
+			draw_rect(strip_rect, Color(color.r, color.g, color.b, alpha), true)
+
+
+	func _draw_info_frame(rect: Rect2, color: Color) -> void:
+		var frame_rect := rect.grow(4.0)
+		draw_rect(frame_rect, Color(color.r, color.g, color.b, 0.36), false, 1.0)
+		draw_rect(frame_rect.grow(-7.0), Color(0.84, 0.66, 0.38, 0.18), false, 1.0)
+
+		var corner := 34.0
+		var width := 2.0
+		var corner_color := Color(color.r, color.g, color.b, 0.72)
+		_draw_corner(frame_rect.position, Vector2.RIGHT, Vector2.DOWN, corner, corner_color, width)
+		_draw_corner(Vector2(frame_rect.end.x, frame_rect.position.y), Vector2.LEFT, Vector2.DOWN, corner, corner_color, width)
+		_draw_corner(Vector2(frame_rect.position.x, frame_rect.end.y), Vector2.RIGHT, Vector2.UP, corner, corner_color, width)
+		_draw_corner(frame_rect.end, Vector2.LEFT, Vector2.UP, corner, corner_color, width)
+
+
+	func _draw_title_ornaments() -> void:
+		var y := 102.0
+		var half_gap := 150.0
+		var line_len := 210.0
+		var center_x := size.x * 0.5
+		var color := Color(0.84, 0.66, 0.38, 0.42)
+		draw_line(Vector2(center_x - half_gap - line_len, y), Vector2(center_x - half_gap, y), color, 1.0)
+		draw_line(Vector2(center_x + half_gap, y), Vector2(center_x + half_gap + line_len, y), color, 1.0)
+		draw_circle(Vector2(center_x - half_gap - 18.0, y), 3.0, Color(0.84, 0.66, 0.38, 0.42))
+		draw_circle(Vector2(center_x + half_gap + 18.0, y), 3.0, Color(0.84, 0.66, 0.38, 0.42))
+		draw_line(Vector2(center_x - 26.0, y + 18.0), Vector2(center_x, y + 34.0), color, 1.0)
+		draw_line(Vector2(center_x, y + 34.0), Vector2(center_x + 26.0, y + 18.0), color, 1.0)
+
+
+	func _draw_hint_ornaments() -> void:
+		var y := size.y - 56.0
+		var center_x := size.x * 0.25
+		var color := Color(0.84, 0.66, 0.38, 0.34)
+		draw_line(Vector2(center_x - 250.0, y), Vector2(center_x - 118.0, y), color, 1.0)
+		draw_line(Vector2(center_x + 118.0, y), Vector2(center_x + 250.0, y), color, 1.0)
+		draw_circle(Vector2(center_x - 104.0, y), 3.0, color)
+		draw_circle(Vector2(center_x + 104.0, y), 3.0, color)
+
+
+	func _draw_corner_ornaments() -> void:
+		var inset := 26.0
+		var length := 58.0
+		var color := Color(0.84, 0.66, 0.38, 0.38)
+		_draw_corner(Vector2(inset, inset), Vector2.RIGHT, Vector2.DOWN, length, color, 1.0)
+		_draw_corner(Vector2(size.x - inset, inset), Vector2.LEFT, Vector2.DOWN, length, color, 1.0)
+		_draw_corner(Vector2(inset, size.y - inset), Vector2.RIGHT, Vector2.UP, length, color, 1.0)
+		_draw_corner(Vector2(size.x - inset, size.y - inset), Vector2.LEFT, Vector2.UP, length, color, 1.0)
+
+
+	func _draw_corner(origin: Vector2, horizontal: Vector2, vertical: Vector2, length: float, color: Color, width: float) -> void:
+		draw_line(origin, origin + horizontal * length, color, width)
+		draw_line(origin, origin + vertical * length, color, width)
+
+
+class ShowcasePanelFrame:
+	extends Control
+
+	var theme_color := Color(0.48, 0.68, 1.0)
+	var accent_color := Color(1.0, 0.78, 0.34)
+
+
+	func set_colors(new_theme_color: Color, new_accent_color: Color) -> void:
+		theme_color = new_theme_color
+		accent_color = new_accent_color
+		queue_redraw()
+
+
+	func _draw() -> void:
+		if size.x <= 0.0 or size.y <= 0.0:
+			return
+
+		var rect := Rect2(Vector2(8.0, 10.0), size - Vector2(16.0, 20.0))
+		draw_rect(rect, Color(0.0, 0.0, 0.0, 0.08), true)
+		draw_rect(rect, Color(theme_color.r, theme_color.g, theme_color.b, 0.34), false, 1.0)
+		draw_rect(rect.grow(-8.0), Color(0.84, 0.66, 0.38, 0.16), false, 1.0)
+
+		var corner := 44.0
+		var corner_color := Color(accent_color.r, accent_color.g, accent_color.b, 0.42)
+		_draw_corner(rect.position, Vector2.RIGHT, Vector2.DOWN, corner, corner_color)
+		_draw_corner(Vector2(rect.end.x, rect.position.y), Vector2.LEFT, Vector2.DOWN, corner, corner_color)
+		_draw_corner(Vector2(rect.position.x, rect.end.y), Vector2.RIGHT, Vector2.UP, corner, corner_color)
+		_draw_corner(rect.end, Vector2.LEFT, Vector2.UP, corner, corner_color)
+
+
+	func _draw_corner(origin: Vector2, horizontal: Vector2, vertical: Vector2, length: float, color: Color) -> void:
+		draw_line(origin, origin + horizontal * length, color, 1.0)
+		draw_line(origin, origin + vertical * length, color, 1.0)
+
+
+class CardFrameOverlay:
+	extends Control
+
+	var accent_color := Color(1.0, 0.78, 0.34)
+	var selected := false
+	var locked := false
+
+
+	func set_state(new_accent_color: Color, new_selected: bool, new_locked := false) -> void:
+		accent_color = new_accent_color
+		selected = new_selected
+		locked = new_locked
+		queue_redraw()
+
+
+	func _draw() -> void:
+		if size.x <= 0.0 or size.y <= 0.0:
+			return
+
+		var rect := Rect2(Vector2(3.0, 3.0), size - Vector2(6.0, 6.0))
+		var border_alpha := 0.9 if selected else 0.36
+		var border_width := 2.0 if selected else 1.0
+
+		if selected:
+			draw_rect(rect.grow(5.0), Color(accent_color.r, accent_color.g, accent_color.b, 0.16), false, 3.0)
+			draw_rect(rect.grow(9.0), Color(accent_color.r, accent_color.g, accent_color.b, 0.08), false, 3.0)
+
+		draw_rect(rect, Color(accent_color.r, accent_color.g, accent_color.b, border_alpha), false, border_width)
+		draw_rect(rect.grow(-7.0), Color(0.94, 0.78, 0.48, 0.18 if selected else 0.08), false, 1.0)
+
+		var corner := 22.0
+		var corner_color := Color(accent_color.r, accent_color.g, accent_color.b, 0.92 if selected else 0.42)
+		_draw_corner(rect.position, Vector2.RIGHT, Vector2.DOWN, corner, corner_color, border_width)
+		_draw_corner(Vector2(rect.end.x, rect.position.y), Vector2.LEFT, Vector2.DOWN, corner, corner_color, border_width)
+		_draw_corner(Vector2(rect.position.x, rect.end.y), Vector2.RIGHT, Vector2.UP, corner, corner_color, border_width)
+		_draw_corner(rect.end, Vector2.LEFT, Vector2.UP, corner, corner_color, border_width)
+
+		if locked:
+			_draw_locked_sigil(rect)
+
+
+	func _draw_locked_sigil(rect: Rect2) -> void:
+		var center := rect.get_center()
+		var color := Color(0.84, 0.76, 0.62, 0.14)
+		draw_arc(center, 64.0, 0.0, TAU, 80, color, 1.0)
+		draw_arc(center, 42.0, 0.0, TAU, 80, color, 1.0)
+		for index in range(8):
+			var angle := TAU * float(index) / 8.0
+			var from := center + Vector2(cos(angle), sin(angle)) * 50.0
+			var to := center + Vector2(cos(angle), sin(angle)) * 68.0
+			draw_line(from, to, color, 1.0)
+
+
+	func _draw_corner(origin: Vector2, horizontal: Vector2, vertical: Vector2, length: float, color: Color, width: float) -> void:
+		draw_line(origin, origin + horizontal * length, color, width)
+		draw_line(origin, origin + vertical * length, color, width)
+
+
+class CardSymbol:
+	extends Control
+
+	var shape := "star"
+	var accent_color := Color(1.0, 0.78, 0.34)
+	var selected := false
+
+
+	func set_symbol_data(new_shape: String, new_accent_color: Color, new_selected: bool) -> void:
+		shape = new_shape
+		accent_color = new_accent_color
+		selected = new_selected
+		queue_redraw()
+
+
+	func _draw() -> void:
+		if size.x <= 0.0 or size.y <= 0.0:
+			return
+
+		var center := size * 0.5
+		var glow_alpha := 0.18 if selected else 0.06
+		draw_circle(center, 30.0, Color(accent_color.r, accent_color.g, accent_color.b, glow_alpha))
+		draw_arc(center, 22.0, 0.0, TAU, 72, Color(accent_color.r, accent_color.g, accent_color.b, 0.48 if selected else 0.18), 1.0)
+		_draw_shape(center, 14.0, Color(1.0, 0.88, 0.62, 1.0) if selected else Color(accent_color.r, accent_color.g, accent_color.b, 0.72), 2.0)
+
+
+	func _draw_shape(center: Vector2, radius: float, color: Color, width: float) -> void:
+		match shape:
+			"slash":
+				draw_line(center + Vector2(-radius, radius * 0.7), center + Vector2(radius, -radius * 0.7), color, width)
+				draw_line(center + Vector2(-radius * 0.45, radius), center + Vector2(radius * 0.75, -radius * 0.2), color, width)
+			"step":
+				_draw_diamond(center, radius, color, width)
+				draw_circle(center, 5.0, color)
+			"protocol":
+				draw_rect(Rect2(center - Vector2(radius * 0.65, radius * 0.65), Vector2(radius * 1.3, radius * 1.3)), color, false, width)
+				draw_rect(Rect2(center - Vector2(radius * 0.32, radius * 0.32), Vector2(radius * 0.64, radius * 0.64)), color, false, 1.0)
+			"barrier":
+				draw_arc(center, radius, 0.0, TAU, 48, color, width)
+				draw_arc(center, radius * 0.58, PI * 0.12, PI * 1.85, 40, color, width)
+			"ray":
+				for index in range(6):
+					var angle := TAU * float(index) / 6.0
+					draw_line(center + Vector2(cos(angle), sin(angle)) * 4.0, center + Vector2(cos(angle), sin(angle)) * radius, color, width)
+			_:
+				_draw_star(center, radius, color, width)
+
+
+	func _draw_star(center: Vector2, radius: float, color: Color, width: float) -> void:
+		draw_line(center + Vector2(0, -radius), center + Vector2(0, radius), color, width)
+		draw_line(center + Vector2(-radius, 0), center + Vector2(radius, 0), color, width)
+		draw_line(center + Vector2(-radius * 0.55, -radius * 0.55), center + Vector2(radius * 0.55, radius * 0.55), color, width * 0.65)
+		draw_line(center + Vector2(radius * 0.55, -radius * 0.55), center + Vector2(-radius * 0.55, radius * 0.55), color, width * 0.65)
+
+
+	func _draw_diamond(center: Vector2, radius: float, color: Color, width: float) -> void:
+		var top := center + Vector2(0.0, -radius)
+		var right := center + Vector2(radius, 0.0)
+		var bottom := center + Vector2(0.0, radius)
+		var left := center + Vector2(-radius, 0.0)
+		draw_line(top, right, color, width)
+		draw_line(right, bottom, color, width)
+		draw_line(bottom, left, color, width)
+		draw_line(left, top, color, width)
+
+
+class SkillIcon:
+	extends Control
+
+	var shape := "star"
+	var icon_color := Color(0.22, 0.62, 1.0)
+
+
+	func set_icon_data(new_shape: String, new_color: Color) -> void:
+		shape = new_shape
+		icon_color = new_color
+		queue_redraw()
+
+
+	func _draw() -> void:
+		if size.x <= 0.0 or size.y <= 0.0:
+			return
+
+		var center := size * 0.5
+		var radius := minf(size.x, size.y) * 0.42
+		draw_circle(center, radius, Color(0.0, 0.0, 0.0, 0.62))
+		draw_circle(center, radius * 0.86, Color(icon_color.r, icon_color.g, icon_color.b, 0.08))
+		draw_arc(center, radius, 0.0, TAU, 80, Color(icon_color.r, icon_color.g, icon_color.b, 0.95), 2.0)
+		draw_arc(center, radius * 0.72, PI * 0.12, PI * 1.82, 60, Color(1.0, 0.92, 0.78, 0.36), 1.0)
+		_draw_symbol(center, radius * 0.43, Color(1.0, 0.95, 0.86, 1.0), 2.2)
+
+
+	func _draw_symbol(center: Vector2, radius: float, color: Color, width: float) -> void:
+		match shape:
+			"slash":
+				draw_line(center + Vector2(-radius, radius * 0.65), center + Vector2(radius, -radius * 0.65), color, width)
+				draw_line(center + Vector2(-radius * 0.35, radius), center + Vector2(radius * 0.78, -radius * 0.05), color, width * 0.85)
+			"step":
+				_draw_diamond(center, radius, color, width)
+				draw_circle(center, radius * 0.36, color)
+			"protocol":
+				draw_rect(Rect2(center - Vector2(radius * 0.72, radius * 0.72), Vector2(radius * 1.44, radius * 1.44)), color, false, width)
+				draw_rect(Rect2(center - Vector2(radius * 0.36, radius * 0.36), Vector2(radius * 0.72, radius * 0.72)), color, false, width * 0.7)
+			"barrier":
+				draw_arc(center, radius, 0.0, TAU, 60, color, width)
+				draw_arc(center, radius * 0.62, PI * 0.08, PI * 1.92, 50, color, width)
+			"ray":
+				for index in range(8):
+					var angle := TAU * float(index) / 8.0
+					var inner := center + Vector2(cos(angle), sin(angle)) * radius * 0.22
+					var outer := center + Vector2(cos(angle), sin(angle)) * radius
+					draw_line(inner, outer, color, width)
+			_:
+				draw_line(center + Vector2(0, -radius), center + Vector2(0, radius), color, width)
+				draw_line(center + Vector2(-radius, 0), center + Vector2(radius, 0), color, width)
+				draw_line(center + Vector2(-radius * 0.55, -radius * 0.55), center + Vector2(radius * 0.55, radius * 0.55), color, width * 0.65)
+				draw_line(center + Vector2(radius * 0.55, -radius * 0.55), center + Vector2(-radius * 0.55, radius * 0.55), color, width * 0.65)
+
+
+	func _draw_diamond(center: Vector2, radius: float, color: Color, width: float) -> void:
+		var top := center + Vector2(0.0, -radius)
+		var right := center + Vector2(radius, 0.0)
+		var bottom := center + Vector2(0.0, radius)
+		var left := center + Vector2(-radius, 0.0)
+		draw_line(top, right, color, width)
+		draw_line(right, bottom, color, width)
+		draw_line(bottom, left, color, width)
+		draw_line(left, top, color, width)
+
+
 func _ready() -> void:
 	characters = Catalog.get_characters()
 	selected_index = Catalog.find_character_index(GameState.selected_character_id)
@@ -109,6 +463,9 @@ func _draw() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		queue_redraw()
+		if not characters.is_empty():
+			var character: Dictionary = characters[selected_index]
+			call_deferred("_sync_fade_layer", character["theme_color"], character["accent_color"], character.get("info_side", "left"))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -135,6 +492,16 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _build_ui() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+
+	background_image = FocusedTexture.new()
+	background_image.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	background_image.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(background_image)
+
+	fade_layer = ShowcaseFade.new()
+	fade_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fade_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(fade_layer)
 
 	var frame := MarginContainer.new()
 	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -195,43 +562,30 @@ func _build_card_area(parent: Control) -> void:
 
 
 func _build_detail_area(parent: Control) -> void:
-	detail_panel = PanelContainer.new()
+	detail_panel = Control.new()
 	detail_panel.custom_minimum_size = Vector2(DETAIL_PANEL_WIDTH, 0)
 	detail_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail_panel.clip_contents = true
-	detail_panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.03, 0.045, 0.075, 0.82), Color(0.77, 0.58, 0.34, 0.52), 1, 2))
 	parent.add_child(detail_panel)
 
-	var detail_root := Control.new()
-	detail_root.clip_contents = true
-	detail_root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	detail_panel.add_child(detail_root)
-
-	detail_image = FocusedTexture.new()
-	detail_image.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	detail_image.set_anchors_preset(Control.PRESET_FULL_RECT)
-	detail_root.add_child(detail_image)
-
-	var shade := ColorRect.new()
-	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	shade.color = Color(0.0, 0.0, 0.0, 0.18)
-	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
-	detail_root.add_child(shade)
+	detail_frame = ShowcasePanelFrame.new()
+	detail_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	detail_frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	detail_panel.add_child(detail_frame)
 
 	detail_info_panel = PanelContainer.new()
-	detail_info_panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.015, 0.022, 0.036, 0.88), Color(0.77, 0.58, 0.34, 0.26), 1, 2))
-	detail_root.add_child(detail_info_panel)
+	detail_info_panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.015, 0.022, 0.036, 0.1), Color(0.77, 0.58, 0.34, 0.08), 1, 2))
+	detail_panel.add_child(detail_info_panel)
 
 	var info_margin := MarginContainer.new()
-	info_margin.add_theme_constant_override("margin_left", 24)
-	info_margin.add_theme_constant_override("margin_top", 22)
-	info_margin.add_theme_constant_override("margin_right", 24)
-	info_margin.add_theme_constant_override("margin_bottom", 20)
+	info_margin.add_theme_constant_override("margin_left", 28)
+	info_margin.add_theme_constant_override("margin_top", 24)
+	info_margin.add_theme_constant_override("margin_right", 28)
+	info_margin.add_theme_constant_override("margin_bottom", 22)
 	detail_info_panel.add_child(info_margin)
 
 	var info_column := VBoxContainer.new()
-	info_column.add_theme_constant_override("separation", 11)
+	info_column.add_theme_constant_override("separation", 12)
 	info_margin.add_child(info_column)
 
 	detail_name_label = Label.new()
@@ -273,7 +627,7 @@ func _build_detail_area(parent: Control) -> void:
 
 	select_button = Button.new()
 	select_button.text = "선택하기"
-	select_button.custom_minimum_size = Vector2(300, 58)
+	select_button.custom_minimum_size = Vector2(300, 64)
 	select_button.add_theme_font_size_override("font_size", 28)
 	select_button.pressed.connect(_start_selected_character)
 	info_column.add_child(select_button)
@@ -316,17 +670,14 @@ func _make_card(slot_index: int) -> Button:
 		bottom_shade.offset_bottom = 0
 		button.add_child(bottom_shade)
 
-		var symbol := Label.new()
-		symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		symbol.text = character["skills"][0]["icon_label"]
-		symbol.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		symbol.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		symbol.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-		symbol.offset_top = -112
-		symbol.offset_bottom = -58
-		symbol.add_theme_font_size_override("font_size", 42)
-		button.add_child(symbol)
-		card_symbol_labels.append(symbol)
+		var card_symbol := CardSymbol.new()
+		card_symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card_symbol.set_symbol_data(character["skills"][0].get("icon_shape", "star"), character["accent_color"], false)
+		card_symbol.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+		card_symbol.offset_top = -112
+		card_symbol.offset_bottom = -58
+		button.add_child(card_symbol)
+		card_symbol_controls.append(card_symbol)
 
 		var name_label := Label.new()
 		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -340,9 +691,22 @@ func _make_card(slot_index: int) -> Button:
 		name_label.add_theme_color_override("font_color", Color(0.95, 0.86, 0.7))
 		button.add_child(name_label)
 		card_name_labels.append(name_label)
+
+		var frame_overlay := CardFrameOverlay.new()
+		frame_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		frame_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+		frame_overlay.set_state(character["accent_color"], false)
+		button.add_child(frame_overlay)
+		card_frame_overlays.append(frame_overlay)
 	else:
 		button.disabled = true
 		button.add_theme_stylebox_override("disabled", _make_card_style(Color(0.015, 0.022, 0.035, 0.68), Color(0.35, 0.28, 0.2, 0.45), 1))
+
+		var locked_frame := CardFrameOverlay.new()
+		locked_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		locked_frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+		locked_frame.set_state(Color(0.58, 0.46, 0.32, 0.68), false, true)
+		button.add_child(locked_frame)
 
 		var lock_label := Label.new()
 		lock_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -386,42 +750,51 @@ func _update_selection() -> void:
 			continue
 
 		var button := card_buttons[index]
+		var character_for_card: Dictionary = characters[index]
 		if index == selected_index:
 			button.add_theme_stylebox_override("normal", _make_card_style(Color(0.05, 0.045, 0.052, 0.95), accent_color, 3))
 			button.add_theme_stylebox_override("hover", _make_card_style(Color(0.06, 0.05, 0.06, 0.98), accent_color.lightened(0.16), 3))
 			card_name_labels[index].add_theme_color_override("font_color", Color(1.0, 0.92, 0.74))
-			card_symbol_labels[index].add_theme_color_override("font_color", accent_color)
+			card_symbol_controls[index].set_symbol_data(character_for_card["skills"][0].get("icon_shape", "star"), accent_color, true)
+			card_frame_overlays[index].set_state(accent_color, true)
 		else:
 			button.add_theme_stylebox_override("normal", _make_card_style(Color(0.02, 0.03, 0.05, 0.86), Color(0.48, 0.36, 0.22, 0.72), 1))
 			button.add_theme_stylebox_override("hover", _make_card_style(Color(0.04, 0.05, 0.08, 0.92), Color(0.72, 0.56, 0.34, 0.9), 2))
 			card_name_labels[index].add_theme_color_override("font_color", Color(0.9, 0.82, 0.68))
-			card_symbol_labels[index].add_theme_color_override("font_color", Color(0.72, 0.58, 0.42))
+			card_symbol_controls[index].set_symbol_data(character_for_card["skills"][0].get("icon_shape", "star"), Color(0.72, 0.58, 0.42), false)
+			card_frame_overlays[index].set_state(Color(0.48, 0.36, 0.22, 0.72), false)
 
-	detail_panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.03, 0.045, 0.075, 0.82), theme_color.darkened(0.12), 1, 2))
-	detail_image.set_texture_data(
-		_load_texture(character["detail_image"]),
-		character.get("detail_mode", "contain"),
-		character.get("detail_focus", Vector2(0.5, 0.5)),
-		Color(1.0, 1.0, 1.0, 0.96),
-		character.get("detail_overlay_color", Color(0.0, 0.0, 0.0, 0.05))
+	background_image.set_texture_data(
+		_load_texture(character.get("select_background_image", character["detail_image"])),
+		character.get("select_background_mode", "cover"),
+		character.get("select_background_focus", Vector2(0.5, 0.5)),
+		Color.WHITE,
+		Color(0.0, 0.0, 0.0, 0.0)
 	)
-	_position_detail_info_panel(character.get("detail_info_side", "left"))
+	detail_info_panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.015, 0.022, 0.036, 0.24), theme_color.lightened(0.08), 1, 2))
+	detail_frame.set_colors(theme_color, accent_color)
+
+	var info_side: String = character.get("info_side", "left")
+	_position_detail_info_panel(info_side, character.get("info_width", 520.0))
+	call_deferred("_sync_fade_layer", theme_color, accent_color, info_side)
 
 	detail_name_label.text = character["name"]
 	detail_name_label.add_theme_color_override("font_color", Color(0.98, 0.88, 0.68))
 	detail_subtitle_label.text = character["subtitle"]
 	detail_concept_label.text = character["concept"]
+	select_button.add_theme_stylebox_override("normal", _make_panel_style(Color(0.06, 0.06, 0.07, 0.68), accent_color.darkened(0.28), 1, 2))
+	select_button.add_theme_stylebox_override("hover", _make_panel_style(Color(0.11, 0.1, 0.12, 0.78), accent_color, 1, 2))
+	select_button.add_theme_stylebox_override("pressed", _make_panel_style(Color(0.04, 0.04, 0.05, 0.88), accent_color.lightened(0.12), 1, 2))
 
 	_rebuild_skill_list(character["skills"])
 	call_deferred("_scroll_selected_card_into_view_deferred")
 
 
-func _position_detail_info_panel(side: String) -> void:
-	var panel_width := 500.0
+func _position_detail_info_panel(side: String, panel_width: float) -> void:
 	detail_info_panel.anchor_top = 0.0
 	detail_info_panel.anchor_bottom = 1.0
-	detail_info_panel.offset_top = 28.0
-	detail_info_panel.offset_bottom = -28.0
+	detail_info_panel.offset_top = DETAIL_INFO_TOP
+	detail_info_panel.offset_bottom = -DETAIL_INFO_BOTTOM
 
 	if side == "right":
 		detail_info_panel.anchor_left = 1.0
@@ -431,8 +804,20 @@ func _position_detail_info_panel(side: String) -> void:
 	else:
 		detail_info_panel.anchor_left = 0.0
 		detail_info_panel.anchor_right = 0.0
-		detail_info_panel.offset_left = 28.0
-		detail_info_panel.offset_right = panel_width + 28.0
+		detail_info_panel.offset_left = 22.0
+		detail_info_panel.offset_right = panel_width + 22.0
+
+
+func _sync_fade_layer(theme_color: Color, accent_color: Color, info_side: String) -> void:
+	if fade_layer == null or detail_info_panel == null:
+		return
+
+	var global_rect := detail_info_panel.get_global_rect()
+	if global_rect.size.x <= 0.0 or global_rect.size.y <= 0.0:
+		return
+
+	var local_position: Vector2 = fade_layer.get_global_transform().affine_inverse() * global_rect.position
+	fade_layer.set_fade_data(theme_color, accent_color, Rect2(local_position, global_rect.size), info_side)
 
 
 func _rebuild_skill_list(skills: Array) -> void:
@@ -441,28 +826,20 @@ func _rebuild_skill_list(skills: Array) -> void:
 
 	for skill in skills:
 		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 12)
+		row.add_theme_constant_override("separation", 14)
 		skill_list.add_child(row)
-
-		var icon_panel := PanelContainer.new()
-		icon_panel.custom_minimum_size = Vector2(62, 62)
-		icon_panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.02, 0.03, 0.05, 0.9), skill["color"], 2, 31))
-		row.add_child(icon_panel)
 
 		var icon_texture := _load_texture(skill.get("icon_path", ""))
 		if icon_texture != null:
 			var icon_image := FocusedTexture.new()
-			icon_image.custom_minimum_size = Vector2(48, 48)
+			icon_image.custom_minimum_size = Vector2(62, 62)
 			icon_image.set_texture_data(icon_texture, "contain", Vector2(0.5, 0.5))
-			icon_panel.add_child(icon_image)
+			row.add_child(icon_image)
 		else:
-			var icon_label := Label.new()
-			icon_label.text = skill["icon_label"]
-			icon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			icon_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			icon_label.add_theme_font_size_override("font_size", 30)
-			icon_label.add_theme_color_override("font_color", Color(1.0, 0.94, 0.86))
-			icon_panel.add_child(icon_label)
+			var skill_icon := SkillIcon.new()
+			skill_icon.custom_minimum_size = Vector2(62, 62)
+			skill_icon.set_icon_data(skill.get("icon_shape", "star"), skill["color"])
+			row.add_child(skill_icon)
 
 		var text_column := VBoxContainer.new()
 		text_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -510,9 +887,10 @@ func _load_texture(path: String) -> Texture2D:
 	if path.is_empty():
 		return null
 
-	var texture := load(path) as Texture2D
-	if texture != null:
-		return texture
+	if ResourceLoader.exists(path, "Texture2D"):
+		var texture := load(path) as Texture2D
+		if texture != null:
+			return texture
 
 	var image := Image.new()
 	if image.load(path) != OK:

@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/fireball.gd" id="fireball_script"]
-[ext_resource type="Texture2D" path="res://assets/art/fireball.png" id="fireball_texture"]
+[ext_resource type="Texture2D" path="res://assets/players/mage/skills/fireball/fireball.png" id="fireball_texture"]
 
 [sub_resource type="CircleShape2D" id="fireball_shape"]
 radius = 18.0
@@ -17,4 +17,3 @@ texture = ExtResource("fireball_texture")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("fireball_shape")
-

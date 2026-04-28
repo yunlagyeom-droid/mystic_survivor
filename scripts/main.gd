@@ -7,13 +7,15 @@ extends Node2D
 @export var ultimate_cutin_texture: Texture2D
 @export var ultimate_vfx_texture: Texture2D
 @export var spawn_distance := 760.0
-@export var spawn_interval := 0.22
+@export var spawn_interval := 0.3
 @export var max_enemies := 400
 @export var world_radius := 2600.0
 @export var background_scale := 0.82
 @export var ultimate_required_kills := 10
 @export var debug_ultimate_always_ready := true
 @export var ultimate_cutin_side := "right"
+@export var ultimate_cutin_width_scale := 0.75
+@export var ultimate_cutin_x_offset := 96.0
 @export var ultimate_damage := 120
 @export var ultimate_max_targets := 36
 @export var ultimate_warning_duration := 1.0
@@ -71,6 +73,7 @@ func _ready() -> void:
 	randomize()
 	_ensure_input_actions()
 	_build_ultimate_vfx_material()
+	_apply_selected_character_ultimate_cutin()
 	_build_background()
 	_build_ui()
 
@@ -98,6 +101,24 @@ func _ready() -> void:
 		player.barrier_shield_max
 	)
 	_update_ultimate_ui()
+
+
+func _apply_selected_character_ultimate_cutin() -> void:
+	var character := GameState.get_selected_character()
+	if character.is_empty():
+		return
+
+	var cutin_path := str(character.get("ultimate_cutin_image", ""))
+	if not cutin_path.is_empty():
+		var selected_cutin := load(cutin_path) as Texture2D
+		if selected_cutin != null:
+			ultimate_cutin_texture = selected_cutin
+			if ultimate_texture_rect != null:
+				ultimate_texture_rect.texture = selected_cutin
+
+	ultimate_cutin_side = str(character.get("ultimate_cutin_side", ultimate_cutin_side))
+	ultimate_cutin_width_scale = float(character.get("ultimate_cutin_width_scale", ultimate_cutin_width_scale))
+	ultimate_cutin_x_offset = float(character.get("ultimate_cutin_x_offset", ultimate_cutin_x_offset))
 
 
 func _process(delta: float) -> void:
@@ -978,7 +999,7 @@ func _build_ultimate_overlay(parent: Control) -> void:
 
 func _position_ultimate_cutin(hidden: bool) -> void:
 	var viewport_size := get_viewport_rect().size
-	var cutin_width := minf(700.0, viewport_size.x * 0.52) * 0.75
+	var cutin_width := minf(700.0, viewport_size.x * 0.52) * ultimate_cutin_width_scale
 	ultimate_texture_rect.size = Vector2(cutin_width, viewport_size.y)
 	ultimate_texture_rect.position = _ultimate_cutin_hidden_position() if hidden else _ultimate_cutin_target_position()
 	ultimate_texture_rect.modulate.a = 0.0 if hidden else 1.0
@@ -994,9 +1015,9 @@ func _ultimate_cutin_hidden_position() -> Vector2:
 
 func _ultimate_cutin_target_position() -> Vector2:
 	var viewport_size := get_viewport_rect().size
-	var x := viewport_size.x - ultimate_texture_rect.size.x + 96.0
+	var x := viewport_size.x - ultimate_texture_rect.size.x + ultimate_cutin_x_offset
 	if ultimate_cutin_side == "left":
-		x = -96.0
+		x = -ultimate_cutin_x_offset
 	return Vector2(x, 0.0)
 
 

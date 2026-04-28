@@ -27,6 +27,9 @@ func _physics_process(delta: float) -> void:
 	contact_timer = maxf(0.0, contact_timer - delta)
 	sprite.modulate = sprite.modulate.lerp(Color.WHITE, minf(1.0, delta * 12.0))
 
+	if is_dead:
+		return
+
 	if not is_instance_valid(player):
 		return
 

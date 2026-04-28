@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://cc7u618nb7qqr"
+path="res://.godot/imported/20 - The Journey.mp3-824c6e119d77a1da38f6698cb1783080.mp3str"
+
+[deps]
+
+source_file="res://assets/_asset_store/xDeviruchi - 16 bit Fantasy & Adventure (2025)/mp3/20 - The Journey.mp3"
+dest_files=["res://.godot/imported/20 - The Journey.mp3-824c6e119d77a1da38f6698cb1783080.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

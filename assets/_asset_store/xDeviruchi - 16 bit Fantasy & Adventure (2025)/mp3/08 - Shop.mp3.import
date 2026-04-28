@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://2a15wjvcsdnx"
+path="res://.godot/imported/08 - Shop.mp3-b8062d7c39f8a156d42422977177f8f5.mp3str"
+
+[deps]
+
+source_file="res://assets/_asset_store/xDeviruchi - 16 bit Fantasy & Adventure (2025)/mp3/08 - Shop.mp3"
+dest_files=["res://.godot/imported/08 - Shop.mp3-b8062d7c39f8a156d42422977177f8f5.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

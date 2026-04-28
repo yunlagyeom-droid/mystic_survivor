@@ -62,11 +62,37 @@ func _ready() -> void:
 	current_health = max_health
 	required_experience = level_required_base
 	add_to_group("player")
+	_apply_selected_character_sprite()
 	_build_defense_vfx_material()
 	_build_barrier_visual()
 	health_changed.emit(current_health, max_health)
 	experience_changed.emit(experience, required_experience, level)
 	_emit_defense_status()
+
+
+func _apply_selected_character_sprite() -> void:
+	var character := GameState.get_selected_character()
+	if character.is_empty():
+		return
+
+	var sprite_sheet_path := str(character.get("sprite_sheet", ""))
+	if not sprite_sheet_path.is_empty():
+		var selected_texture := load(sprite_sheet_path) as Texture2D
+		if selected_texture != null:
+			sprite.texture = selected_texture
+
+	sprite_columns = int(character.get("sprite_columns", sprite_columns))
+	sprite_rows = int(character.get("sprite_rows", sprite_rows))
+	sprite.hframes = sprite_columns
+	sprite.vframes = sprite_rows
+
+	var configured_scale: Variant = character.get("sprite_scale", null)
+	if configured_scale is Vector2:
+		sprite.scale = configured_scale
+
+	var configured_position: Variant = character.get("sprite_position", null)
+	if configured_position is Vector2:
+		sprite.position = configured_position
 
 
 func _physics_process(delta: float) -> void:

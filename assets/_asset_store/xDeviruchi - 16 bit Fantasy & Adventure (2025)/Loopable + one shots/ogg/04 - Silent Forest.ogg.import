@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://c0ue25k4y50u0"
+path="res://.godot/imported/04 - Silent Forest.ogg-b74b56650e1916d855c33de3ea528487.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/_asset_store/xDeviruchi - 16 bit Fantasy & Adventure (2025)/Loopable + one shots/ogg/04 - Silent Forest.ogg"
+dest_files=["res://.godot/imported/04 - Silent Forest.ogg-b74b56650e1916d855c33de3ea528487.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

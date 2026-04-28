@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://c1f64g6ujmfbq"
+path="res://.godot/imported/21 - Final Battle - For Love.mp3-801fcad516c08bd4e8eab7ceecd146ff.mp3str"
+
+[deps]
+
+source_file="res://assets/_asset_store/xDeviruchi - 16 bit Fantasy & Adventure (2025)/mp3/21 - Final Battle - For Love.mp3"
+dest_files=["res://.godot/imported/21 - Final Battle - For Love.mp3-801fcad516c08bd4e8eab7ceecd146ff.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

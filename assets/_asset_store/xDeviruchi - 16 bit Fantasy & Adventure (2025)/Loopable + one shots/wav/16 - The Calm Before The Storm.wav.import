@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://du6t7goaabpk5"
+path="res://.godot/imported/16 - The Calm Before The Storm.wav-f4022e90892b2b9d4ddd50ce61319b9c.sample"
+
+[deps]
+
+source_file="res://assets/_asset_store/xDeviruchi - 16 bit Fantasy & Adventure (2025)/Loopable + one shots/wav/16 - The Calm Before The Storm.wav"
+dest_files=["res://.godot/imported/16 - The Calm Before The Storm.wav-f4022e90892b2b9d4ddd50ce61319b9c.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

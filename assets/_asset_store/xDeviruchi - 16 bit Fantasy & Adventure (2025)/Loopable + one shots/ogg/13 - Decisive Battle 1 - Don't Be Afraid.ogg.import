@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://c6rkc0u33q4eo"
+path="res://.godot/imported/13 - Decisive Battle 1 - Don't Be Afraid.ogg-0d58f38ab488cff21113d56f5fa9faf0.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/_asset_store/xDeviruchi - 16 bit Fantasy & Adventure (2025)/Loopable + one shots/ogg/13 - Decisive Battle 1 - Don't Be Afraid.ogg"
+dest_files=["res://.godot/imported/13 - Decisive Battle 1 - Don't Be Afraid.ogg-0d58f38ab488cff21113d56f5fa9faf0.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

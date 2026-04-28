@@ -30,7 +30,7 @@ signal died
 @export var blink_vfx_texture: Texture2D
 @export var barrier_vfx_texture: Texture2D
 @export var blink_vfx_scale := 0.34
-@export var barrier_vfx_scale := 0.28
+@export var barrier_vfx_scale := 0.44
 
 var current_health := 100
 var level := 1
@@ -253,7 +253,7 @@ func _build_barrier_visual() -> void:
 	barrier_ring.closed = true
 	barrier_ring.z_index = 20
 	barrier_ring.default_color = Color(0.45, 0.78, 1.0, 0.0)
-	barrier_ring.points = _make_circle_points(42.0, 48)
+	barrier_ring.points = _make_circle_points(62.0, 56)
 	barrier_ring.visible = false
 	add_child(barrier_ring)
 
@@ -263,7 +263,7 @@ func _build_barrier_visual() -> void:
 		barrier_sprite.region_enabled = true
 		barrier_sprite.region_rect = _make_vfx_region(barrier_vfx_texture, 0, 0)
 		barrier_sprite.material = defense_vfx_material
-		barrier_sprite.position = Vector2(0, -8)
+		barrier_sprite.position = Vector2(0, -10)
 		barrier_sprite.scale = Vector2.ONE * barrier_vfx_scale
 		barrier_sprite.z_index = 19
 		barrier_sprite.visible = false
@@ -334,10 +334,12 @@ func _spawn_barrier_break_vfx() -> void:
 	if vfx_parent == null:
 		return
 	if barrier_vfx_texture != null:
-		_spawn_sheet_vfx(vfx_parent, barrier_vfx_texture, 2, 0, global_position, barrier_vfx_scale * 1.15, 0.26, 24)
-		_spawn_sheet_vfx(vfx_parent, barrier_vfx_texture, 2, 1, global_position, barrier_vfx_scale * 1.28, 0.32, 25)
-		_spawn_sheet_vfx(vfx_parent, barrier_vfx_texture, 2, 2, global_position, barrier_vfx_scale * 1.42, 0.38, 26)
-		_spawn_sheet_vfx(vfx_parent, barrier_vfx_texture, 2, 3, global_position, barrier_vfx_scale * 1.08, 0.42, 24)
+		_spawn_vfx_ring(vfx_parent, global_position, 58.0, 2.9, 0.42, Color(0.82, 0.96, 1.0, 0.9), 6.0, 27)
+		_spawn_vfx_ring(vfx_parent, global_position, 38.0, 4.2, 0.5, Color(0.35, 0.78, 1.0, 0.58), 3.0, 24)
+		_spawn_sheet_vfx(vfx_parent, barrier_vfx_texture, 2, 0, global_position, barrier_vfx_scale * 1.22, 0.34, 24)
+		_spawn_sheet_vfx(vfx_parent, barrier_vfx_texture, 2, 1, global_position, barrier_vfx_scale * 1.42, 0.42, 25)
+		_spawn_sheet_vfx(vfx_parent, barrier_vfx_texture, 2, 2, global_position, barrier_vfx_scale * 1.72, 0.5, 26)
+		_spawn_sheet_vfx(vfx_parent, barrier_vfx_texture, 2, 3, global_position, barrier_vfx_scale * 1.32, 0.58, 24)
 		return
 
 	var ring := Line2D.new()
@@ -345,7 +347,7 @@ func _spawn_barrier_break_vfx() -> void:
 	ring.closed = true
 	ring.z_index = 14
 	ring.default_color = Color(0.55, 0.86, 1.0, 0.8)
-	ring.points = _make_circle_points(42.0, 48)
+	ring.points = _make_circle_points(62.0, 56)
 	ring.global_position = global_position
 	vfx_parent.add_child(ring)
 
@@ -431,8 +433,10 @@ func _spawn_blink_arrival_damage_vfx(world_position: Vector2) -> void:
 	if vfx_parent == null:
 		return
 	if blink_vfx_texture != null:
-		_spawn_sheet_vfx(vfx_parent, blink_vfx_texture, 2, 2, world_position, blink_vfx_scale * 1.25, 0.32, 23)
-		_spawn_sheet_vfx(vfx_parent, blink_vfx_texture, 3, 1, world_position, blink_vfx_scale * 1.0, 0.75, 12)
+		_spawn_vfx_ring(vfx_parent, world_position, blink_arrival_radius * 0.35, 2.8, 0.42, Color(0.78, 0.96, 1.0, 0.86), 5.0, 24)
+		_spawn_vfx_ring(vfx_parent, world_position, blink_arrival_radius * 0.55, 2.0, 0.52, Color(0.32, 0.76, 1.0, 0.58), 3.0, 21)
+		_spawn_sheet_vfx(vfx_parent, blink_vfx_texture, 2, 2, world_position, blink_vfx_scale * 1.72, 0.48, 23)
+		_spawn_sheet_vfx(vfx_parent, blink_vfx_texture, 3, 1, world_position, blink_vfx_scale * 1.25, 0.9, 12)
 		return
 
 	var ring := Line2D.new()
@@ -495,8 +499,10 @@ func _spawn_barrier_hit_vfx() -> void:
 		return
 
 	var hit_column := randi_range(0, 3)
-	var offset := Vector2.RIGHT.rotated(randf() * TAU) * randf_range(12.0, 30.0)
-	_spawn_sheet_vfx(vfx_parent, barrier_vfx_texture, 1, hit_column, global_position + Vector2(0, -8) + offset, barrier_vfx_scale * 0.72, 0.22, 24)
+	var offset := Vector2.RIGHT.rotated(randf() * TAU) * randf_range(18.0, 44.0)
+	var hit_position := global_position + Vector2(0, -10) + offset
+	_spawn_sheet_vfx(vfx_parent, barrier_vfx_texture, 1, hit_column, hit_position, barrier_vfx_scale * 0.92, 0.28, 25)
+	_spawn_vfx_ring(vfx_parent, global_position + Vector2(0, -10), 54.0, 1.45, 0.22, Color(0.85, 0.98, 1.0, 0.72), 3.5, 24)
 
 
 func _spawn_blink_sheet_vfx(vfx_parent: Node, start_position: Vector2, end_position: Vector2) -> void:
@@ -505,7 +511,7 @@ func _spawn_blink_sheet_vfx(vfx_parent: Node, start_position: Vector2, end_posit
 	var angle := direction.angle() if distance > 0.01 else 0.0
 	var midpoint := start_position + direction * 0.5
 
-	_spawn_sheet_vfx(vfx_parent, blink_vfx_texture, 0, 1, start_position, blink_vfx_scale * 0.9, 0.24, 20)
+	_spawn_sheet_vfx(vfx_parent, blink_vfx_texture, 0, 1, start_position, blink_vfx_scale * 1.02, 0.3, 20)
 
 	var trail := _make_sheet_sprite(blink_vfx_texture, 1, 0, midpoint, blink_vfx_scale, 18)
 	trail.rotation = angle
@@ -516,8 +522,9 @@ func _spawn_blink_sheet_vfx(vfx_parent: Node, start_position: Vector2, end_posit
 	afterimage.rotation = angle
 	vfx_parent.add_child(afterimage)
 
-	_spawn_sheet_vfx(vfx_parent, blink_vfx_texture, 2, 0, end_position, blink_vfx_scale * 0.86, 0.24, 21)
-	_spawn_sheet_vfx(vfx_parent, blink_vfx_texture, 2, 1, end_position, blink_vfx_scale * 0.76, 0.28, 20)
+	_spawn_vfx_ring(vfx_parent, end_position, 22.0, 2.6, 0.32, Color(0.75, 0.95, 1.0, 0.72), 4.0, 22)
+	_spawn_sheet_vfx(vfx_parent, blink_vfx_texture, 2, 0, end_position, blink_vfx_scale * 1.08, 0.38, 21)
+	_spawn_sheet_vfx(vfx_parent, blink_vfx_texture, 2, 1, end_position, blink_vfx_scale * 0.96, 0.42, 20)
 
 	var tween := create_tween()
 	tween.set_parallel(true)
@@ -527,6 +534,24 @@ func _spawn_blink_sheet_vfx(vfx_parent: Node, start_position: Vector2, end_posit
 	tween.tween_property(afterimage, "scale", afterimage.scale * 1.08, 0.3)
 	tween.finished.connect(trail.queue_free)
 	tween.finished.connect(afterimage.queue_free)
+
+
+func _spawn_vfx_ring(vfx_parent: Node, world_position: Vector2, radius: float, target_scale: float, duration: float, color: Color, width: float, z_index: int) -> Line2D:
+	var ring := Line2D.new()
+	ring.width = width
+	ring.closed = true
+	ring.z_index = z_index
+	ring.default_color = color
+	ring.points = _make_circle_points(radius, 56)
+	ring.global_position = world_position
+	vfx_parent.add_child(ring)
+
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(ring, "scale", Vector2.ONE * target_scale, duration)
+	tween.tween_property(ring, "modulate:a", 0.0, duration)
+	tween.finished.connect(ring.queue_free)
+	return ring
 
 
 func _spawn_sheet_vfx(vfx_parent: Node, texture: Texture2D, row: int, column: int, world_position: Vector2, scale_amount: float, duration: float, z_index: int) -> Sprite2D:

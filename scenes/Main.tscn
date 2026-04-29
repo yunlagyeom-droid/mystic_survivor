@@ -1,22 +1,18 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="main_script"]
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="player_scene"]
 [ext_resource type="PackedScene" path="res://scenes/Slime.tscn" id="slime_scene"]
-[ext_resource type="PackedScene" path="res://scenes/Fireball.tscn" id="fireball_scene"]
 [ext_resource type="PackedScene" path="res://scenes/ExperienceGem.tscn" id="gem_scene"]
 [ext_resource type="Texture2D" path="res://assets/maps/grass_fantasy/backgrounds/stage_grass_fantasy.png" id="stage_texture"]
 [ext_resource type="Texture2D" path="res://assets/players/mage/portraits/player_mage_ultimate_character.png" id="ultimate_cutin"]
-[ext_resource type="Texture2D" path="res://assets/players/mage/skills/ultimate/ultimate_starfall_vfx_sheet.png" id="ultimate_vfx"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("main_script")
 slime_scene = ExtResource("slime_scene")
-fireball_scene = ExtResource("fireball_scene")
 experience_gem_scene = ExtResource("gem_scene")
 background_texture = ExtResource("stage_texture")
 ultimate_cutin_texture = ExtResource("ultimate_cutin")
-ultimate_vfx_texture = ExtResource("ultimate_vfx")
 
 [node name="Background" type="Node2D" parent="."]
 z_index = -100

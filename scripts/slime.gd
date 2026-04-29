@@ -1,7 +1,7 @@
 class_name Slime
 extends CharacterBody2D
 
-signal died(position: Vector2, experience_value: int)
+signal defeated(defeat_info: Dictionary)
 
 @export var move_speed := 105.0
 @export var max_health := 36
@@ -43,7 +43,7 @@ func _physics_process(delta: float) -> void:
 	_try_damage_player()
 
 
-func take_damage(amount: int) -> void:
+func take_damage(amount: int, source := "attack") -> void:
 	if is_dead:
 		return
 
@@ -52,8 +52,19 @@ func take_damage(amount: int) -> void:
 
 	if current_health <= 0:
 		is_dead = true
-		died.emit(global_position, experience_value)
+		defeated.emit(_make_defeat_info(source))
 		queue_free()
+
+
+func _make_defeat_info(source: String) -> Dictionary:
+	return {
+		"position": global_position,
+		"experience_value": experience_value,
+		"counts_as_defeat": true,
+		"charges_ultimate": source != "ultimate",
+		"is_boss": false,
+		"source": source,
+	}
 
 
 func _try_damage_player() -> void:

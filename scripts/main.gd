@@ -3,12 +3,14 @@ extends Node2D
 @export var slime_scene: PackedScene
 @export var experience_gem_scene: PackedScene
 @export var background_texture: Texture2D
+@export var background_textures: Array[Texture2D] = []
 @export var ultimate_cutin_texture: Texture2D
 @export var spawn_distance := 760.0
 @export var spawn_interval := 0.3
 @export var max_enemies := 400
 @export var world_radius := 2600.0
 @export var background_scale := 0.82
+@export var background_tile_overlap := Vector2(0.72, 0.52)
 @export var ultimate_required_kills := 10
 @export var debug_ultimate_always_ready := true
 @export var ultimate_cutin_side := "right"
@@ -426,18 +428,37 @@ func _apply_selected_character_ultimate_cutin() -> void:
 
 
 func _build_background() -> void:
-	if background_texture == null:
+	var textures := background_textures.duplicate()
+	if textures.is_empty() and background_texture != null:
+		textures.append(background_texture)
+	if textures.is_empty() or textures[0] == null:
 		return
 
-	var tile_size := Vector2(background_texture.get_width(), background_texture.get_height()) * background_scale
-	var tiles_each_side := int(ceil((world_radius * 2.0) / tile_size.x / 2.0)) + 1
+	var tile_size := Vector2(textures[0].get_width(), textures[0].get_height()) * background_scale
+	var step_size := tile_size
+	var use_quarter_view_layout := textures.size() > 1
+	if use_quarter_view_layout:
+		step_size = Vector2(
+			tile_size.x * background_tile_overlap.x,
+			tile_size.y * background_tile_overlap.y
+		)
 
-	for y in range(-tiles_each_side, tiles_each_side + 1):
-		for x in range(-tiles_each_side, tiles_each_side + 1):
+	var tiles_x_each_side := int(ceil(world_radius / step_size.x)) + 3
+	var tiles_y_each_side := int(ceil(world_radius / step_size.y)) + 3
+
+	for y in range(-tiles_y_each_side, tiles_y_each_side + 1):
+		for x in range(-tiles_x_each_side, tiles_x_each_side + 1):
+			var texture_index := absi((x * 31) + (y * 17)) % textures.size()
+			var texture: Texture2D = textures[texture_index]
+			if texture == null:
+				continue
+
 			var tile := Sprite2D.new()
-			tile.texture = background_texture
+			tile.texture = texture
 			tile.scale = Vector2.ONE * background_scale
-			tile.position = Vector2(x * tile_size.x, y * tile_size.y)
+			tile.position = Vector2(x * step_size.x, y * step_size.y)
+			if use_quarter_view_layout and y % 2 != 0:
+				tile.position.x += step_size.x * 0.5
 			background.add_child(tile)
 
 

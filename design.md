@@ -232,6 +232,32 @@ Because this is a 2.5D quarter-view game:
 
 Readability must be prioritized over excessive detail, clutter, or flashy effects.
 
+## Urban Map Sheet Direction
+The rainy city stage should eventually move from a repeated full background image to a composable tile sheet.
+
+The base urban tile sheet should use 512x256 diamond tiles for 2.5D quarter-view readability.
+
+The sheet should be grouped by map-building purpose:
+- road base tiles: 2-3 wet asphalt variants
+- road centerline tiles: straight dashed centerline and a broken/worn variant
+- crosswalk tiles: start, middle, and end pieces
+- sidewalk base tiles: 2-3 wet concrete variants
+- curb tiles: upper road edge and lower road edge
+- road-sidewalk corner tiles: upper-left, upper-right, lower-left, and lower-right corners
+- intersection tiles: wider road crossing pieces and crosswalk intersection pieces
+- floor detail tiles: manholes, drains, puddles, cracked asphalt, and worn concrete
+
+The intended composition rules are:
+- build wide roads by repeating road base tiles and centerline tiles in a continuous row
+- place curb tiles as one continuous row above and below road bands
+- fill outside the curb rows with sidewalk base tiles
+- build crosswalks from start, middle, and end pieces at specific columns
+- use intersection tile groups for road crossings instead of random road tile scattering
+
+Direction matters for both floor tiles and future obstacles.
+Road tiles that run horizontally and road tiles that run diagonally should be separate assets.
+Future obstacle sprites such as cars and barricades should eventually have direction variants, but the first obstacle pass can use one direction per prop while the map sheet structure is stabilized.
+
 ## Long-Term Direction
 As the project grows, it should continue to reinforce these pillars:
 - satisfying wave clear

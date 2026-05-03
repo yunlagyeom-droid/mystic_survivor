@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/maps/rainy_city_v2/props/road_barricade.png" id="barricade_texture"]
+
+[sub_resource type="RectangleShape2D" id="collision_shape"]
+size = Vector2(150, 72)
+
+[node name="RoadBarricade" type="StaticBody2D"]
+collision_layer = 16
+collision_mask = 0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -95)
+texture = ExtResource("barricade_texture")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -48)
+shape = SubResource("collision_shape")

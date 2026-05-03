@@ -1,38 +1,38 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="main_script"]
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="player_scene"]
 [ext_resource type="PackedScene" path="res://scenes/Slime.tscn" id="slime_scene"]
 [ext_resource type="PackedScene" path="res://scenes/ExperienceGem.tscn" id="gem_scene"]
+[ext_resource type="PackedScene" path="res://scenes/props/AbandonedCar.tscn" id="car_obstacle"]
+[ext_resource type="PackedScene" path="res://scenes/props/RoadBarricade.tscn" id="barricade_obstacle"]
 [ext_resource type="Texture2D" path="res://assets/maps/grass_fantasy/backgrounds/stage_grass_fantasy.png" id="stage_texture"]
 [ext_resource type="Texture2D" path="res://assets/players/mage/portraits/player_mage_ultimate_character.png" id="ultimate_cutin"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_01_01.png" id="city_floor_01"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_01_02.png" id="city_floor_02"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_01_03.png" id="city_floor_03"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_01_04.png" id="city_floor_04"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_02_01.png" id="city_floor_05"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_02_02.png" id="city_floor_06"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_02_03.png" id="city_floor_07"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_02_04.png" id="city_floor_08"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_03_01.png" id="city_floor_09"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_03_02.png" id="city_floor_10"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_03_03.png" id="city_floor_11"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city/floors/rainy_city_floor_03_04.png" id="city_floor_12"]
+[ext_resource type="Texture2D" path="res://assets/maps/rainy_city_v2/source/rainy_city_generated_master.png" id="city_master"]
+[ext_resource type="TileSet" path="res://assets/maps/rainy_city_v2/tilesets/rainy_city_tileset.tres" id="city_tileset"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("main_script")
 slime_scene = ExtResource("slime_scene")
 experience_gem_scene = ExtResource("gem_scene")
+obstacle_scenes = Array[PackedScene]([ExtResource("car_obstacle"), ExtResource("barricade_obstacle")])
 background_texture = ExtResource("stage_texture")
-background_textures = Array[Texture2D]([ExtResource("city_floor_01"), ExtResource("city_floor_02"), ExtResource("city_floor_03"), ExtResource("city_floor_04"), ExtResource("city_floor_05"), ExtResource("city_floor_06"), ExtResource("city_floor_07"), ExtResource("city_floor_08"), ExtResource("city_floor_09"), ExtResource("city_floor_10"), ExtResource("city_floor_11"), ExtResource("city_floor_12")])
+city_tile_set = ExtResource("city_tileset")
+city_master_texture = ExtResource("city_master")
 ultimate_cutin_texture = ExtResource("ultimate_cutin")
 
 [node name="Background" type="Node2D" parent="."]
 z_index = -100
 
+[node name="CityTileMap" type="TileMapLayer" parent="Background"]
+tile_set = ExtResource("city_tileset")
+
 [node name="GemContainer" type="Node2D" parent="."]
 
 [node name="EnemyContainer" type="Node2D" parent="."]
+
+[node name="ObstacleContainer" type="Node2D" parent="."]
+y_sort_enabled = true
 
 [node name="ProjectileContainer" type="Node2D" parent="."]
 

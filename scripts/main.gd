@@ -1,16 +1,29 @@
 extends Node2D
 
+const CITY_ROAD_TOP_ROW := -4
+const CITY_ROAD_BOTTOM_ROW := 2
+const CITY_TOP_CURB_ROW := -5
+const CITY_BOTTOM_CURB_ROW := 3
+const CITY_CENTERLINE_ROW := -1
+const CITY_CROSSWALK_COLUMN := -1
+
 @export var slime_scene: PackedScene
 @export var experience_gem_scene: PackedScene
+@export var obstacle_scenes: Array[PackedScene] = []
 @export var background_texture: Texture2D
-@export var background_textures: Array[Texture2D] = []
+@export var city_tile_set: TileSet
+@export var use_city_tilemap := true
+@export var city_master_texture: Texture2D
+@export var road_background_textures: Array[Texture2D] = []
+@export var sidewalk_background_texture: Texture2D
+@export var curb_north_background_texture: Texture2D
+@export var curb_south_background_texture: Texture2D
 @export var ultimate_cutin_texture: Texture2D
 @export var spawn_distance := 760.0
 @export var spawn_interval := 0.3
 @export var max_enemies := 400
 @export var world_radius := 2600.0
 @export var background_scale := 0.82
-@export var background_tile_overlap := Vector2(0.72, 0.52)
 @export var ultimate_required_kills := 10
 @export var debug_ultimate_always_ready := true
 @export var ultimate_cutin_side := "right"
@@ -19,6 +32,7 @@ extends Node2D
 @export var ultimate_damage := 120
 @export var ultimate_max_targets := 36
 @export var ultimate_radius := 720.0
+@export var show_experiment_mode_button := true
 
 var elapsed_time := 0.0
 var defeated_count := 0
@@ -26,6 +40,7 @@ var ultimate_kills := 0
 var ultimate_ready := false
 var ultimate_showing := false
 var suppress_ultimate_charge := false
+var experiment_mode := false
 var game_over := false
 
 var canvas_layer: CanvasLayer
@@ -38,6 +53,7 @@ var defeated_label: Label
 var ultimate_label: Label
 var skill_1_label: Label
 var skill_2_label: Label
+var experiment_mode_button: Button
 var level_up_panel: PanelContainer
 var level_up_title: Label
 var level_up_option_buttons: Array[Button] = []
@@ -50,9 +66,11 @@ var ultimate_texture_rect: TextureRect
 var ultimate_flash_rect: ColorRect
 
 @onready var background: Node2D = $Background
+@onready var city_tile_map: TileMapLayer = $Background/CityTileMap
 @onready var player: Player = $Player
 @onready var camera: Camera2D = $Player/Camera2D
 @onready var enemy_container: Node2D = $EnemyContainer
+@onready var obstacle_container: Node2D = $ObstacleContainer
 @onready var projectile_container: Node2D = $ProjectileContainer
 @onready var gem_container: Node2D = $GemContainer
 @onready var ultimate_vfx_container: Node2D = $UltimateVfxContainer
@@ -64,6 +82,7 @@ func _ready() -> void:
 	_ensure_input_actions()
 	_apply_selected_character_ultimate_cutin()
 	_build_background()
+	_build_obstacles()
 	_build_ui()
 
 	player.projectile_requested.connect(_spawn_projectile)
@@ -86,20 +105,23 @@ func _process(delta: float) -> void:
 	if game_over:
 		return
 
-	elapsed_time += delta
+	if not experiment_mode:
+		elapsed_time += delta
 	time_label.text = _format_time(elapsed_time)
 	defeated_label.text = "처치: %d" % defeated_count
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ultimate"):
+	if event.is_action_pressed("dev_experiment_mode"):
+		_set_experiment_mode(not experiment_mode)
+	elif event.is_action_pressed("ultimate"):
 		_try_use_ultimate()
 	elif game_over and event.is_action_pressed("ui_accept"):
 		_restart_game()
 
 
 func _spawn_enemy() -> void:
-	if game_over or get_tree().paused:
+	if game_over or get_tree().paused or experiment_mode:
 		return
 	if enemy_container.get_child_count() >= max_enemies:
 		return
@@ -155,6 +177,35 @@ func _spawn_experience_gem(spawn_position: Vector2, experience_value: int) -> vo
 	var gem := experience_gem_scene.instantiate() as ExperienceGem
 	gem_container.add_child(gem)
 	gem.setup(spawn_position, experience_value)
+
+
+func _build_obstacles() -> void:
+	if obstacle_container == null or obstacle_scenes.is_empty():
+		return
+
+	var placements := [
+		{"scene_index": 0, "position": Vector2(-720, -260), "rotation": -0.08},
+		{"scene_index": 1, "position": Vector2(-340, 360), "rotation": 0.04},
+		{"scene_index": 1, "position": Vector2(440, -420), "rotation": -0.03},
+		{"scene_index": 0, "position": Vector2(760, 250), "rotation": 0.06},
+	]
+
+	for placement in placements:
+		var scene_index := int(placement["scene_index"])
+		if scene_index < 0 or scene_index >= obstacle_scenes.size():
+			continue
+
+		var obstacle_scene := obstacle_scenes[scene_index]
+		if obstacle_scene == null:
+			continue
+
+		var obstacle := obstacle_scene.instantiate() as Node2D
+		if obstacle == null:
+			continue
+
+		obstacle_container.add_child(obstacle)
+		obstacle.global_position = placement["position"]
+		obstacle.rotation = float(placement["rotation"])
 
 
 func _try_use_ultimate() -> void:
@@ -428,38 +479,191 @@ func _apply_selected_character_ultimate_cutin() -> void:
 
 
 func _build_background() -> void:
-	var textures := background_textures.duplicate()
-	if textures.is_empty() and background_texture != null:
-		textures.append(background_texture)
-	if textures.is_empty() or textures[0] == null:
+	if use_city_tilemap and city_tile_set != null and city_tile_map != null:
+		_build_city_tilemap_background()
 		return
 
-	var tile_size := Vector2(textures[0].get_width(), textures[0].get_height()) * background_scale
-	var step_size := tile_size
-	var use_quarter_view_layout := textures.size() > 1
-	if use_quarter_view_layout:
-		step_size = Vector2(
-			tile_size.x * background_tile_overlap.x,
-			tile_size.y * background_tile_overlap.y
-		)
+	if city_master_texture != null:
+		_build_city_master_background()
+		return
 
-	var tiles_x_each_side := int(ceil(world_radius / step_size.x)) + 3
-	var tiles_y_each_side := int(ceil(world_radius / step_size.y)) + 3
+	if not road_background_textures.is_empty() and sidewalk_background_texture != null:
+		_build_quarter_view_city_background()
+		return
 
-	for y in range(-tiles_y_each_side, tiles_y_each_side + 1):
-		for x in range(-tiles_x_each_side, tiles_x_each_side + 1):
-			var texture_index := absi((x * 31) + (y * 17)) % textures.size()
-			var texture: Texture2D = textures[texture_index]
+	if background_texture == null:
+		return
+
+	var tile_size := Vector2(background_texture.get_width(), background_texture.get_height()) * background_scale
+	var tiles_each_side := int(ceil((world_radius * 2.0) / tile_size.x / 2.0)) + 1
+
+	for y in range(-tiles_each_side, tiles_each_side + 1):
+		for x in range(-tiles_each_side, tiles_each_side + 1):
+			var tile := Sprite2D.new()
+			tile.texture = background_texture
+			tile.scale = Vector2.ONE * background_scale
+			tile.position = Vector2(x * tile_size.x, y * tile_size.y)
+			background.add_child(tile)
+
+
+func _build_city_tilemap_background() -> void:
+	city_tile_map.clear()
+	city_tile_map.tile_set = city_tile_set
+	city_tile_map.scale = Vector2.ONE * background_scale
+
+	var tile_size := Vector2(city_tile_set.tile_size)
+	var step_x := tile_size.x * 0.5 * background_scale
+	var step_y := tile_size.y * 0.5 * background_scale
+	var tile_extent := tile_size * background_scale
+	var columns_each_side := int(ceil(world_radius / step_x)) + 6
+	var rows_each_side := int(ceil(world_radius / step_y)) + 6
+
+	for y in range(-rows_each_side, rows_each_side + 1):
+		for x in range(-columns_each_side, columns_each_side + 1):
+			var cell := Vector2i(x, y)
+			var tile_center := city_tile_map.map_to_local(cell) * background_scale
+			if absf(tile_center.x) > world_radius + tile_extent.x or absf(tile_center.y) > world_radius + tile_extent.y:
+				continue
+
+			var atlas_coords := _pick_city_tilemap_atlas_coords(cell)
+			city_tile_map.set_cell(cell, 0, atlas_coords)
+
+
+func _pick_city_tilemap_atlas_coords(cell: Vector2i) -> Vector2i:
+	if cell.y == CITY_TOP_CURB_ROW:
+		return Vector2i(0, 2)
+	if cell.y == CITY_BOTTOM_CURB_ROW:
+		return Vector2i(1, 2)
+
+	if cell.y < CITY_TOP_CURB_ROW or cell.y > CITY_BOTTOM_CURB_ROW:
+		return _pick_city_sidewalk_atlas_coords(cell)
+
+	if _is_city_crosswalk_cell(cell):
+		return Vector2i(cell.x - (CITY_CROSSWALK_COLUMN - 1), 1)
+
+	if cell.y >= CITY_ROAD_TOP_ROW and cell.y <= CITY_ROAD_BOTTOM_ROW:
+		if cell.y == CITY_CENTERLINE_ROW and not _is_city_centerline_break(cell):
+			return Vector2i(3 + _positive_mod(cell.x, 2), 0)
+
+		var detail_tile := _pick_city_authored_detail_atlas_coords(cell)
+		if detail_tile != Vector2i(-1, -1):
+			return detail_tile
+
+		return _pick_city_road_base_atlas_coords(cell)
+
+	return _pick_city_sidewalk_atlas_coords(cell)
+
+
+func _is_city_crosswalk_cell(cell: Vector2i) -> bool:
+	return (
+		cell.y == CITY_CENTERLINE_ROW
+		and cell.x >= CITY_CROSSWALK_COLUMN - 1
+		and cell.x <= CITY_CROSSWALK_COLUMN + 1
+	)
+
+
+func _is_city_centerline_break(cell: Vector2i) -> bool:
+	return cell.x >= CITY_CROSSWALK_COLUMN - 1 and cell.x <= CITY_CROSSWALK_COLUMN + 1
+
+
+func _pick_city_authored_detail_atlas_coords(cell: Vector2i) -> Vector2i:
+	if cell == Vector2i(-7, -2) or cell == Vector2i(8, 1):
+		return Vector2i(2, 2)
+	if cell == Vector2i(5, -3):
+		return Vector2i(3, 2)
+	if cell == Vector2i(-11, 1) or cell == Vector2i(12, -1):
+		return Vector2i(4, 2)
+	if cell == Vector2i(-9, 5) or cell == Vector2i(7, -7):
+		return Vector2i(5, 2)
+	return Vector2i(-1, -1)
+
+
+func _pick_city_road_base_atlas_coords(cell: Vector2i) -> Vector2i:
+	return Vector2i(_positive_mod(cell.x + cell.y, 3), 0)
+
+
+func _pick_city_sidewalk_atlas_coords(cell: Vector2i) -> Vector2i:
+	if cell == Vector2i(-9, -8) or cell == Vector2i(10, 7):
+		return Vector2i(5, 2)
+	return Vector2i(3 + _positive_mod(cell.x + cell.y, 3), 1)
+
+
+func _positive_mod(value: int, divisor: int) -> int:
+	var result := value % divisor
+	if result < 0:
+		result += divisor
+	return result
+
+
+func _build_city_master_background() -> void:
+	var patch_size := Vector2(city_master_texture.get_width(), city_master_texture.get_height()) * background_scale
+	var overlap := 2.0 * background_scale
+	var step := patch_size - Vector2.ONE * overlap
+	var columns_each_side := int(ceil(world_radius / step.x)) + 2
+	var rows_each_side := int(ceil(world_radius / step.y)) + 2
+
+	for y in range(-rows_each_side, rows_each_side + 1):
+		for x in range(-columns_each_side, columns_each_side + 1):
+			var patch := Sprite2D.new()
+			patch.texture = city_master_texture
+			patch.scale = Vector2.ONE * background_scale
+			patch.position = Vector2(x * step.x, y * step.y)
+			background.add_child(patch)
+
+
+func _build_quarter_view_city_background() -> void:
+	var base_texture := road_background_textures[0]
+	if base_texture == null:
+		return
+
+	var tile_size := Vector2(base_texture.get_width(), base_texture.get_height()) * background_scale
+	var tile_overlap := 2.0 * background_scale
+	var step_x := tile_size.x - tile_overlap
+	var step_y := tile_size.y * 0.5 - tile_overlap
+	var columns_each_side := int(ceil(world_radius / step_x)) + 8
+	var rows_each_side := int(ceil(world_radius / step_y)) + 8
+	var road_half_height := world_radius * 0.34
+	var curb_band_height := step_y * 1.5
+
+	for row in range(-rows_each_side, rows_each_side + 1):
+		for column in range(-columns_each_side, columns_each_side + 1):
+			var tile_position := Vector2(
+				column * step_x + (step_x * 0.5 if row % 2 != 0 else 0.0),
+				row * step_y
+			)
+			var texture := _pick_city_background_texture(column, row, tile_position.y, road_half_height, curb_band_height)
 			if texture == null:
 				continue
 
 			var tile := Sprite2D.new()
 			tile.texture = texture
 			tile.scale = Vector2.ONE * background_scale
-			tile.position = Vector2(x * step_size.x, y * step_size.y)
-			if use_quarter_view_layout and y % 2 != 0:
-				tile.position.x += step_size.x * 0.5
+			tile.position = tile_position
 			background.add_child(tile)
+
+
+func _pick_city_background_texture(
+	column: int,
+	row: int,
+	y_position: float,
+	road_half_height: float,
+	curb_band_height: float
+) -> Texture2D:
+	if y_position < -road_half_height - curb_band_height:
+		return sidewalk_background_texture
+	if y_position < -road_half_height:
+		return curb_north_background_texture if curb_north_background_texture != null else sidewalk_background_texture
+	if y_position > road_half_height + curb_band_height:
+		return sidewalk_background_texture
+	if y_position > road_half_height:
+		return curb_south_background_texture if curb_south_background_texture != null else sidewalk_background_texture
+
+	var pattern := absi(column * 13 + row * 7)
+	if road_background_textures.size() >= 3 and pattern % 23 == 0:
+		return road_background_textures[2]
+	if road_background_textures.size() >= 2 and pattern % 5 == 0:
+		return road_background_textures[1]
+	return road_background_textures[0]
 
 
 func _build_ui() -> void:
@@ -528,6 +732,15 @@ func _build_ui() -> void:
 	skill_2_label = Label.new()
 	skill_2_label.custom_minimum_size = Vector2(130, 24)
 	top_row.add_child(skill_2_label)
+
+	if show_experiment_mode_button:
+		experiment_mode_button = Button.new()
+		experiment_mode_button.custom_minimum_size = Vector2(118, 28)
+		experiment_mode_button.focus_mode = Control.FOCUS_NONE
+		experiment_mode_button.toggle_mode = true
+		experiment_mode_button.text = "DEV TEST: OFF"
+		experiment_mode_button.toggled.connect(_set_experiment_mode)
+		top_row.add_child(experiment_mode_button)
 
 	_build_level_up_panel(hud)
 	_build_game_over_panel(hud)
@@ -675,6 +888,33 @@ func _update_ultimate_ui() -> void:
 	ultimate_label.text = "궁극기 준비: Q" if ultimate_ready else "궁극기: %d/%d" % [ultimate_kills, ultimate_required_kills]
 
 
+func _set_experiment_mode(enabled: bool) -> void:
+	experiment_mode = enabled
+	if player != null and player.has_method("set_experiment_mode"):
+		player.set_experiment_mode(experiment_mode)
+
+	if spawn_timer != null:
+		if experiment_mode:
+			spawn_timer.stop()
+		elif not game_over:
+			spawn_timer.start()
+
+	if experiment_mode:
+		_clear_experiment_threats()
+
+	if experiment_mode_button != null:
+		experiment_mode_button.set_pressed_no_signal(experiment_mode)
+		experiment_mode_button.text = "DEV TEST: ON" if experiment_mode else "DEV TEST: OFF"
+		experiment_mode_button.modulate = Color(0.55, 1.0, 0.72) if experiment_mode else Color.WHITE
+
+
+func _clear_experiment_threats() -> void:
+	for child in enemy_container.get_children():
+		child.queue_free()
+	for child in projectile_container.get_children():
+		child.queue_free()
+
+
 func _format_time(seconds: float) -> String:
 	var total_seconds := int(seconds)
 	var minutes := int(total_seconds / 60)
@@ -690,6 +930,7 @@ func _ensure_input_actions() -> void:
 	_set_key_action("ultimate", [KEY_Q])
 	_set_key_action("blink", [KEY_SPACE])
 	_set_key_action("barrier", [KEY_F])
+	_set_key_action("dev_experiment_mode", [KEY_F10])
 
 
 func _set_key_action(action_name: StringName, keys: Array) -> void:

@@ -473,21 +473,27 @@ func _unhandled_input(event: InputEvent) -> void:
 		match event.keycode:
 			KEY_LEFT, KEY_A:
 				_move_selection(-1)
-				get_viewport().set_input_as_handled()
+				_mark_input_as_handled()
 			KEY_RIGHT, KEY_D:
 				_move_selection(1)
-				get_viewport().set_input_as_handled()
+				_mark_input_as_handled()
 			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
+				_mark_input_as_handled()
 				_start_selected_character()
-				get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and event.pressed:
 		match event.button_index:
 			MOUSE_BUTTON_WHEEL_UP:
 				_move_selection(-1)
-				get_viewport().set_input_as_handled()
+				_mark_input_as_handled()
 			MOUSE_BUTTON_WHEEL_DOWN:
 				_move_selection(1)
-				get_viewport().set_input_as_handled()
+				_mark_input_as_handled()
+
+
+func _mark_input_as_handled() -> void:
+	var viewport := get_viewport()
+	if viewport != null:
+		viewport.set_input_as_handled()
 
 
 func _build_ui() -> void:

@@ -6,7 +6,7 @@ const GAME_SCENE_PATH := "res://scenes/Main.tscn"
 
 
 static func get_characters() -> Array:
-	return [
+	var characters := [
 		{
 			"id": "mage",
 			"name": "마법사",
@@ -74,11 +74,24 @@ static func get_characters() -> Array:
 			"card_image": "res://assets/players/hunter/portraits/hunter_select_reference.png",
 			"card_mode": "cover",
 			"card_focus": Vector2(0.25, 0.48),
-			"sprite_sheet": "res://assets/players/hunter/sprites/player_hunter_sprite_sheet_v3.png",
+			"sprite_sheet": "res://assets/players/hunter/sprites/player_hunter.png",
 			"sprite_scale": Vector2(0.42, 0.42),
 			"sprite_position": Vector2(0.0, -8.0),
 			"sprite_columns": 8,
 			"sprite_rows": 8,
+			"idle_sheet": "res://assets/players/hunter/sprites/combat/hunter_combat_idle_v1.png",
+			"idle_columns": 4,
+			"idle_rows": 8,
+			"idle_fps": 4.0,
+			"walk_sheet": "res://assets/players/hunter/sprites/v5/hunter_walk_v5.png",
+			"walk_columns": 8,
+			"walk_rows": 8,
+			"walk_fps": 10.0,
+			"attack_sheet": "res://assets/players/hunter/sprites/combat/hunter_combat_attack_slash_v1.png",
+			"attack_columns": 6,
+			"attack_rows": 8,
+			"attack_fps": 18.0,
+			"attack_duration": 0.34,
 			"combat_script": "res://scripts/combat/hunter_combat.gd",
 			"ultimate_cutin_image": "res://assets/players/hunter/portraits/player_hunter_ultimate_character.png",
 			"ultimate_cutin_side": "right",
@@ -124,6 +137,7 @@ static func get_characters() -> Array:
 			],
 		},
 	]
+	return characters
 
 
 static func get_slot_count() -> int:

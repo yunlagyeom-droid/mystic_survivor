@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hunter Combat Body V2 Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Arial, sans-serif;
+      background: #111217;
+      color: #ece7df;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 18px;
+      font-size: 22px;
+    }
+
+    h2 {
+      margin: 24px 0 12px;
+      color: #f0b0a4;
+      font-size: 15px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      max-width: 1280px;
+    }
+
+    .samples {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      max-width: 900px;
+    }
+
+    .card {
+      background:
+        linear-gradient(45deg, #1b1c22 25%, transparent 25%),
+        linear-gradient(-45deg, #1b1c22 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #1b1c22 75%),
+        linear-gradient(-45deg, transparent 75%, #1b1c22 75%),
+        #262832;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+      background-size: 16px 16px;
+      border: 1px solid #4a3440;
+      border-radius: 6px;
+      padding: 10px;
+    }
+
+    .label {
+      margin-bottom: 8px;
+      color: #ece7df;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    canvas {
+      display: block;
+      width: 160px;
+      height: 160px;
+      margin: 0 auto;
+    }
+
+    img {
+      display: block;
+      width: 160px;
+      height: 160px;
+      object-fit: contain;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Hunter Combat Body V2</h1>
+
+  <h2>body idle v2</h2>
+  <div class="grid" id="idleGrid"></div>
+
+  <h2>body attack v2</h2>
+  <div class="grid" id="attackGrid"></div>
+
+  <h2>direction samples</h2>
+  <div class="samples" id="sampleGrid"></div>
+
+  <script>
+    const cell = 320;
+    const directions = [
+      "down",
+      "down_right",
+      "right",
+      "up_right",
+      "up",
+      "up_left",
+      "left",
+      "down_left",
+    ];
+
+    const samples = [
+      ["down", "../assets/players/hunter/sprites/combat/hunter_combat_body_sample_v2_down.png"],
+      ["down_right", "../assets/players/hunter/sprites/combat/hunter_combat_body_sample_v2_down_right.png"],
+      ["right", "../assets/players/hunter/sprites/combat/hunter_combat_body_sample_v2_right.png"],
+      ["up", "../assets/players/hunter/sprites/combat/hunter_combat_body_sample_v2_up.png"],
+    ];
+
+    function makeGrid(gridId, imagePath, columns, frameMs) {
+      const image = new Image();
+      image.src = imagePath;
+      const grid = document.getElementById(gridId);
+      const canvases = directions.map((name, row) => {
+        const card = document.createElement("section");
+        card.className = "card";
+        const label = document.createElement("div");
+        label.className = "label";
+        label.textContent = name;
+        const canvas = document.createElement("canvas");
+        canvas.width = cell;
+        canvas.height = cell;
+        card.append(label, canvas);
+        grid.append(card);
+        return { canvas, row };
+      });
+
+      let frame = 0;
+      function render() {
+        for (const item of canvases) {
+          const ctx = item.canvas.getContext("2d");
+          ctx.clearRect(0, 0, cell, cell);
+          ctx.drawImage(image, frame * cell, item.row * cell, cell, cell, 0, 0, cell, cell);
+        }
+        frame = (frame + 1) % columns;
+        setTimeout(render, frameMs);
+      }
+      image.addEventListener("load", render);
+    }
+
+    function makeSamples() {
+      const grid = document.getElementById("sampleGrid");
+      for (const [name, path] of samples) {
+        const card = document.createElement("section");
+        card.className = "card";
+        const label = document.createElement("div");
+        label.className = "label";
+        label.textContent = name;
+        const image = document.createElement("img");
+        image.src = path;
+        image.alt = "";
+        card.append(label, image);
+        grid.append(card);
+      }
+    }
+
+    makeGrid("idleGrid", "../assets/players/hunter/sprites/combat/hunter_combat_body_idle_v2.png", 4, 140);
+    makeGrid("attackGrid", "../assets/players/hunter/sprites/combat/hunter_combat_body_attack_slash_v2.png", 6, 85);
+    makeSamples();
+  </script>
+</body>
+</html>

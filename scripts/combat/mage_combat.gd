@@ -37,6 +37,7 @@ var barrier_ring: Line2D
 var barrier_sprite: Sprite2D
 var defense_vfx_material: CanvasItemMaterial
 var ultimate_vfx_material: CanvasItemMaterial
+var experiment_mode := false
 var player: Node
 
 
@@ -49,6 +50,9 @@ func setup(owner: Node) -> void:
 
 
 func combat_process(delta: float, _input_direction: Vector2) -> void:
+	if experiment_mode:
+		_reset_experiment_cooldowns()
+
 	_update_timers(delta)
 	attack_timer -= delta
 	_update_player_modulate()
@@ -66,6 +70,20 @@ func try_skill_1(input_direction: Vector2) -> void:
 
 func try_skill_2(_input_direction: Vector2) -> void:
 	_try_barrier()
+
+
+func set_experiment_mode(enabled: bool) -> void:
+	experiment_mode = enabled
+	if experiment_mode:
+		_reset_experiment_cooldowns()
+	_emit_status()
+
+
+func _reset_experiment_cooldowns() -> void:
+	attack_timer = 0.0
+	blink_timer = 0.0
+	blink_charges = blink_max_charges
+	barrier_timer = 0.0
 
 
 func use_ultimate(context: Dictionary) -> void:
@@ -236,7 +254,7 @@ func _update_timers(delta: float) -> void:
 func _try_fireball() -> void:
 	var nearest_enemy := find_nearest_enemy()
 	if nearest_enemy == null:
-		attack_timer = 0.15
+		attack_timer = 0.0 if experiment_mode else 0.15
 		return
 
 	var direction: Vector2 = (nearest_enemy.global_position - player.global_position).normalized()
@@ -244,11 +262,11 @@ func _try_fireball() -> void:
 		direction = Vector2.RIGHT
 
 	projectile_requested.emit(FIREBALL_SCENE, player.global_position + direction * 40.0, direction, fireball_damage)
-	attack_timer = attack_cooldown
+	attack_timer = 0.0 if experiment_mode else attack_cooldown
 
 
 func _try_blink(input_direction: Vector2) -> void:
-	if blink_charges <= 0:
+	if blink_charges <= 0 and not experiment_mode:
 		return
 
 	var blink_direction := input_direction.normalized()
@@ -264,8 +282,9 @@ func _try_blink(input_direction: Vector2) -> void:
 
 	player.global_position = target_position
 	player.velocity = Vector2.ZERO
-	blink_charges -= 1
-	if blink_charges < blink_max_charges and blink_timer <= 0.0:
+	if not experiment_mode:
+		blink_charges -= 1
+	if blink_charges < blink_max_charges and blink_timer <= 0.0 and not experiment_mode:
 		blink_timer = blink_cooldown
 	player.set_invulnerable(blink_invulnerable_duration)
 	player.last_direction = blink_direction
@@ -276,10 +295,10 @@ func _try_blink(input_direction: Vector2) -> void:
 
 
 func _try_barrier() -> void:
-	if barrier_timer > 0.0:
+	if barrier_timer > 0.0 and not experiment_mode:
 		return
 
-	barrier_timer = barrier_cooldown
+	barrier_timer = 0.0 if experiment_mode else barrier_cooldown
 	barrier_active_timer = barrier_duration
 	barrier_shield_current = barrier_shield_max
 	_update_barrier_visual()

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hunter Sword V1 Preview</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Arial, sans-serif;
+      background: #111217;
+      color: #ece7df;
+    }
+
+    body {
+      margin: 0;
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 18px;
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 16px;
+      max-width: 980px;
+    }
+
+    .card {
+      background:
+        linear-gradient(45deg, #1b1c22 25%, transparent 25%),
+        linear-gradient(-45deg, #1b1c22 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #1b1c22 75%),
+        linear-gradient(-45deg, transparent 75%, #1b1c22 75%),
+        #262832;
+      background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+      background-size: 16px 16px;
+      border: 1px solid #4a3440;
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .label {
+      margin-bottom: 8px;
+      color: #f0b0a4;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .reference {
+      display: block;
+      width: 100%;
+      max-width: 360px;
+      height: auto;
+      margin: 0 auto;
+    }
+
+    canvas {
+      display: block;
+      width: 320px;
+      height: 320px;
+      image-rendering: auto;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Hunter Sword V1</h1>
+  <main class="layout">
+    <section class="card">
+      <div class="label">reference cutout</div>
+      <img class="reference" src="../assets/players/hunter/weapons/hunter_sword_reference_v1.png" alt="">
+    </section>
+    <section class="card">
+      <div class="label">slash sheet loop</div>
+      <canvas id="preview" width="320" height="320"></canvas>
+    </section>
+  </main>
+
+  <script>
+    const image = new Image();
+    image.src = "../assets/players/hunter/weapons/hunter_sword_slash_v1.png";
+
+    const canvas = document.getElementById("preview");
+    const ctx = canvas.getContext("2d");
+    const cell = 320;
+    const columns = 6;
+    let frame = 0;
+
+    function render() {
+      ctx.clearRect(0, 0, cell, cell);
+      ctx.drawImage(image, frame * cell, 0, cell, cell, 0, 0, cell, cell);
+      frame = (frame + 1) % columns;
+      setTimeout(render, 85);
+    }
+
+    image.addEventListener("load", render);
+  </script>
+</body>
+</html>

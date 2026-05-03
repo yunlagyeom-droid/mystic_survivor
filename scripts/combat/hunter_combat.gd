@@ -19,6 +19,7 @@ var guard_active_timer := 0.0
 var guard_damage_scale := 0.35
 var ultimate_damage := 95
 var ultimate_radius := 520.0
+var experiment_mode := false
 var player: Node
 
 
@@ -28,6 +29,9 @@ func setup(owner: Node) -> void:
 
 
 func combat_process(delta: float, _input_direction: Vector2) -> void:
+	if experiment_mode:
+		_reset_experiment_cooldowns()
+
 	slash_timer = maxf(0.0, slash_timer - delta)
 	dash_timer = maxf(0.0, dash_timer - delta)
 	guard_timer = maxf(0.0, guard_timer - delta)
@@ -45,7 +49,7 @@ func combat_process(delta: float, _input_direction: Vector2) -> void:
 
 
 func try_skill_1(input_direction: Vector2) -> void:
-	if dash_timer > 0.0:
+	if dash_timer > 0.0 and not experiment_mode:
 		return
 
 	var dash_direction := input_direction.normalized()
@@ -64,19 +68,32 @@ func try_skill_1(input_direction: Vector2) -> void:
 	player.last_direction = dash_direction
 	player.set_invulnerable(dash_invulnerable_duration)
 	player.update_walk_animation(dash_direction, dash_distance)
-	dash_timer = dash_cooldown
+	dash_timer = 0.0 if experiment_mode else dash_cooldown
 	_spawn_dash_vfx(start_position, target_position)
 	_emit_status()
 
 
 func try_skill_2(_input_direction: Vector2) -> void:
-	if guard_timer > 0.0:
+	if guard_timer > 0.0 and not experiment_mode:
 		return
 
-	guard_timer = guard_cooldown
+	guard_timer = 0.0 if experiment_mode else guard_cooldown
 	guard_active_timer = guard_duration
 	_spawn_guard_vfx()
 	_emit_status()
+
+
+func set_experiment_mode(enabled: bool) -> void:
+	experiment_mode = enabled
+	if experiment_mode:
+		_reset_experiment_cooldowns()
+	_emit_status()
+
+
+func _reset_experiment_cooldowns() -> void:
+	slash_timer = 0.0
+	dash_timer = 0.0
+	guard_timer = 0.0
 
 
 func use_ultimate(context: Dictionary) -> void:
@@ -173,20 +190,24 @@ func modify_incoming_damage(amount: int) -> int:
 func _try_slash() -> void:
 	var nearest_enemy := find_nearest_enemy()
 	if nearest_enemy == null:
-		slash_timer = 0.15
+		slash_timer = 0.0 if experiment_mode else 0.15
 		return
 	if nearest_enemy.global_position.distance_to(player.global_position) > slash_range:
-		slash_timer = 0.18
+		slash_timer = 0.0 if experiment_mode else 0.18
 		return
 
 	var direction: Vector2 = (nearest_enemy.global_position - player.global_position).normalized()
 	if direction == Vector2.ZERO:
-		direction = player.last_direction
+		direction = player.last_attack_direction
 
-	player.last_direction = direction
+	if player.has_method("play_action_animation"):
+		var animation_duration := 0.34
+		if player.has_method("get_action_animation_duration"):
+			animation_duration = player.get_action_animation_duration("attack", animation_duration)
+		player.play_action_animation("attack", direction, animation_duration)
 	nearest_enemy.take_damage(slash_damage, "attack")
 	_spawn_slash_vfx(direction)
-	slash_timer = slash_cooldown
+	slash_timer = 0.0 if experiment_mode else slash_cooldown
 
 
 func _spawn_slash_vfx(direction: Vector2) -> void:
@@ -204,7 +225,7 @@ func _spawn_slash_vfx(direction: Vector2) -> void:
 	vfx_parent.add_child(arc)
 
 	var tween := create_tween()
-	tween.tween_property(arc, "modulate:a", 0.0, 0.18)
+	tween.tween_property(arc, "modulate:a", 0.0, 0.22)
 	tween.finished.connect(arc.queue_free)
 	emit_world_vfx(vfx_parent)
 

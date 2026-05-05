@@ -1145,15 +1145,15 @@ func _build_level_up_panel(parent: Control) -> void:
 
 	var content := Control.new()
 	content.set_anchors_preset(Control.PRESET_CENTER)
-	content.offset_left = -500
-	content.offset_top = -286
-	content.offset_right = 500
-	content.offset_bottom = 286
+	content.offset_left = -560
+	content.offset_top = -330
+	content.offset_right = 560
+	content.offset_bottom = 330
 	level_up_panel.add_child(content)
 
 	level_up_title = Label.new()
 	level_up_title.position = Vector2(0, 0)
-	level_up_title.size = Vector2(1000, 72)
+	level_up_title.size = Vector2(1120, 76)
 	level_up_title.text = "LEVEL UP"
 	level_up_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	level_up_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -1164,22 +1164,22 @@ func _build_level_up_panel(parent: Control) -> void:
 	var subtitle := Label.new()
 	subtitle.text = "증강 선택"
 	subtitle.position = Vector2(0, 64)
-	subtitle.size = Vector2(1000, 28)
+	subtitle.size = Vector2(1120, 28)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_font_size_override("font_size", 20)
 	subtitle.add_theme_color_override("font_color", Color(0.78, 0.74, 0.7))
 	content.add_child(subtitle)
 
 	var cards := HBoxContainer.new()
-	cards.position = Vector2(26, 108)
-	cards.size = Vector2(948, 438)
-	cards.add_theme_constant_override("separation", 28)
+	cards.position = Vector2(54, 124)
+	cards.size = Vector2(1012, 500)
+	cards.add_theme_constant_override("separation", 32)
 	content.add_child(cards)
 
 	level_up_option_buttons.clear()
 	for index in range(3):
 		var button := GothicWidgets.GothicUpgradeCard.new()
-		button.custom_minimum_size = Vector2(296, 438)
+		button.custom_minimum_size = Vector2(316, 500)
 		button.pressed.connect(_choose_level_up_option.bind(index))
 		level_up_option_buttons.append(button)
 		cards.add_child(button)

@@ -472,11 +472,13 @@ class GothicUpgradeCard:
 	var skill_id := ""
 	var accent_color := Color(0.8, 0.8, 0.82)
 	var icon_texture: Texture2D
+	var ui_font: Font
 
 	func _ready() -> void:
 		focus_mode = Control.FOCUS_NONE
 		flat = true
 		_add_empty_button_styles()
+		ui_font = _make_ui_font()
 		_build_children()
 		_sync_layout()
 
@@ -517,7 +519,10 @@ class GothicUpgradeCard:
 		rarity_label = Label.new()
 		rarity_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		rarity_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		rarity_label.add_theme_font_size_override("font_size", 16)
+		rarity_label.add_theme_font_override("font", ui_font)
+		rarity_label.add_theme_font_size_override("font_size", 17)
+		rarity_label.add_theme_constant_override("outline_size", 2)
+		rarity_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.72))
 		add_child(rarity_label)
 
 		name_label = Label.new()
@@ -525,8 +530,11 @@ class GothicUpgradeCard:
 		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		name_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		name_label.add_theme_font_size_override("font_size", 22)
+		name_label.add_theme_font_override("font", ui_font)
+		name_label.add_theme_font_size_override("font_size", 23)
 		name_label.add_theme_color_override("font_color", Color(0.98, 0.94, 0.86))
+		name_label.add_theme_constant_override("outline_size", 3)
+		name_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.82))
 		add_child(name_label)
 
 		icon_rect = TextureRect.new()
@@ -547,40 +555,41 @@ class GothicUpgradeCard:
 		description_label = Label.new()
 		description_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		description_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		description_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		description_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		description_label.add_theme_font_override("font", ui_font)
 		description_label.add_theme_font_size_override("font_size", 18)
-		description_label.add_theme_color_override("font_color", Color(0.82, 0.8, 0.78))
+		description_label.add_theme_color_override("font_color", Color(0.9, 0.88, 0.82))
+		description_label.add_theme_constant_override("outline_size", 2)
+		description_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.78))
 		add_child(description_label)
 
 	func _sync_layout() -> void:
 		if rarity_label == null:
 			return
-		rarity_label.position = Vector2(18.0, 24.0)
+		rarity_label.position = Vector2(18.0, 22.0)
 		rarity_label.size = Vector2(size.x - 36.0, 24.0)
-		name_label.position = Vector2(18.0, 52.0)
-		name_label.size = Vector2(size.x - 36.0, 58.0)
-		icon_rect.position = Vector2(size.x * 0.5 - 76.0, 118.0)
-		icon_rect.size = Vector2(152.0, 152.0)
+		name_label.position = Vector2(18.0, 54.0)
+		name_label.size = Vector2(size.x - 36.0, 60.0)
+		icon_rect.position = Vector2(size.x * 0.5 - 82.0, 126.0)
+		icon_rect.size = Vector2(164.0, 164.0)
 		sigil.position = icon_rect.position
 		sigil.size = icon_rect.size
-		gems.position = Vector2(36.0, 258.0)
+		gems.position = Vector2(36.0, 304.0)
 		gems.size = Vector2(size.x - 72.0, 30.0)
-		description_label.position = Vector2(26.0, 316.0)
-		description_label.size = Vector2(size.x - 52.0, maxf(72.0, size.y - 342.0))
+		description_label.position = Vector2(34.0, 366.0)
+		description_label.size = Vector2(size.x - 68.0, maxf(82.0, size.y - 398.0))
 
 	func _draw() -> void:
 		var rect := Rect2(Vector2.ZERO, size).grow(-3.0)
 		var hover_alpha := 0.12 if is_hovered() else 0.0
 		var press_alpha := 0.12 if button_pressed else 0.0
-		draw_rect(rect, Color(0.02, 0.024, 0.032, 0.94), true)
-		draw_rect(rect.grow(-6.0), Color(accent_color.r, accent_color.g, accent_color.b, 0.1 + hover_alpha), true)
-		draw_rect(rect, Color(accent_color.r, accent_color.g, accent_color.b, 0.82 + press_alpha), false, 2.0)
-		draw_rect(rect.grow(-8.0), Color(1.0, 0.95, 0.82, 0.14), false, 1.0)
-		var icon_center := Vector2(size.x * 0.5, 194.0)
-		draw_circle(icon_center, 85.0, Color(accent_color.r, accent_color.g, accent_color.b, 0.14 + hover_alpha))
-		draw_circle(icon_center, 78.0, Color(0.0, 0.0, 0.0, 0.28))
-		draw_arc(icon_center, 80.0, 0.0, TAU, 96, Color(accent_color.r, accent_color.g, accent_color.b, 0.72), 3.0)
-		draw_line(Vector2(36.0, 296.0), Vector2(size.x - 36.0, 296.0), Color(accent_color.r, accent_color.g, accent_color.b, 0.26), 1.0)
+		draw_style_box(_make_card_style(Color(0.024, 0.026, 0.034, 0.96), Color(accent_color.r, accent_color.g, accent_color.b, 0.72 + press_alpha), 2), rect)
+		draw_style_box(_make_card_style(Color(accent_color.r, accent_color.g, accent_color.b, 0.08 + hover_alpha), Color(1.0, 0.96, 0.84, 0.16), 1), rect.grow(-9.0))
+		var description_box := Rect2(Vector2(22.0, 350.0), Vector2(size.x - 44.0, size.y - 374.0))
+		draw_style_box(_make_card_style(Color(0.02, 0.022, 0.028, 0.38), Color(accent_color.r, accent_color.g, accent_color.b, 0.26), 1), description_box)
+		draw_line(Vector2(44.0, 342.0), Vector2(size.x - 44.0, 342.0), Color(accent_color.r, accent_color.g, accent_color.b, 0.32), 1.0)
+		_draw_card_notch(rect, accent_color.lightened(0.16))
 
 	func _draw_corner_ornaments(rect: Rect2, color: Color) -> void:
 		var length := 34.0
@@ -634,6 +643,39 @@ class GothicUpgradeCard:
 			_:
 				return "노말"
 
+	func _make_card_style(fill_color: Color, border_color: Color, border_width: int) -> StyleBoxFlat:
+		var style := StyleBoxFlat.new()
+		style.bg_color = fill_color
+		style.border_color = border_color
+		style.set_border_width_all(border_width)
+		style.set_corner_radius_all(8)
+		style.shadow_color = Color(0.0, 0.0, 0.0, 0.28)
+		style.shadow_size = 8
+		return style
+
+	func _make_ui_font() -> Font:
+		var font := SystemFont.new()
+		font.font_names = PackedStringArray(["Malgun Gothic", "맑은 고딕", "Noto Sans CJK KR", "Noto Sans KR", "Arial"])
+		font.antialiasing = TextServer.FONT_ANTIALIASING_LCD
+		return font
+
+	func _draw_card_notch(rect: Rect2, color: Color) -> void:
+		var center_x := rect.get_center().x
+		var top_y := rect.position.y + 7.0
+		var bottom_y := rect.end.y - 7.0
+		var top_points := PackedVector2Array([
+			Vector2(center_x - 15.0, top_y),
+			Vector2(center_x, top_y + 10.0),
+			Vector2(center_x + 15.0, top_y),
+		])
+		var bottom_points := PackedVector2Array([
+			Vector2(center_x - 15.0, bottom_y),
+			Vector2(center_x, bottom_y - 10.0),
+			Vector2(center_x + 15.0, bottom_y),
+		])
+		draw_polyline(top_points, color, 1.2)
+		draw_polyline(bottom_points, color, 1.2)
+
 	func _make_circle_mask_material() -> ShaderMaterial:
 		var shader := Shader.new()
 		shader.code = """
@@ -671,18 +713,28 @@ class GothicOverlayFrame:
 
 	func _draw() -> void:
 		var rect := Rect2(Vector2.ZERO, size)
-		draw_rect(rect, Color(0.0, 0.0, 0.0, 0.58), true)
-		draw_rect(rect, Color(theme_color.r, theme_color.g, theme_color.b, 0.08), true)
+		draw_rect(rect, Color(0.0, 0.0, 0.0, 0.54), true)
+		draw_rect(rect, Color(theme_color.r, theme_color.g, theme_color.b, 0.055), true)
 
 		var center_x := size.x * 0.5
-		var title_y := size.y * 0.18
-		var color := Color(accent_color.r, accent_color.g, accent_color.b, 0.42)
-		draw_line(Vector2(center_x - 360.0, title_y), Vector2(center_x - 120.0, title_y), color, 1.0)
-		draw_line(Vector2(center_x + 120.0, title_y), Vector2(center_x + 360.0, title_y), color, 1.0)
-		draw_line(Vector2(center_x - 24.0, title_y + 24.0), Vector2(center_x, title_y + 42.0), color, 1.0)
-		draw_line(Vector2(center_x, title_y + 42.0), Vector2(center_x + 24.0, title_y + 24.0), color, 1.0)
+		var title_y := size.y * 0.17
+		var color := Color(accent_color.r, accent_color.g, accent_color.b, 0.36)
+		draw_line(Vector2(center_x - 310.0, title_y), Vector2(center_x - 82.0, title_y), color, 1.0)
+		draw_line(Vector2(center_x + 82.0, title_y), Vector2(center_x + 310.0, title_y), color, 1.0)
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(center_x, title_y - 12.0),
+			Vector2(center_x + 13.0, title_y),
+			Vector2(center_x, title_y + 12.0),
+			Vector2(center_x - 13.0, title_y),
+		]), Color(accent_color.r, accent_color.g, accent_color.b, 0.18))
+		draw_polyline(PackedVector2Array([
+			Vector2(center_x, title_y - 12.0),
+			Vector2(center_x + 13.0, title_y),
+			Vector2(center_x, title_y + 12.0),
+			Vector2(center_x - 13.0, title_y),
+			Vector2(center_x, title_y - 12.0),
+		]), color, 1.1)
 
-		var inset := 22.0
-		var frame_rect := rect.grow(-inset)
-		draw_rect(frame_rect, Color(accent_color.r, accent_color.g, accent_color.b, 0.18), false, 1.0)
-		draw_rect(frame_rect.grow(-8.0), Color(accent_color.r, accent_color.g, accent_color.b, 0.08), false, 1.0)
+		var vignette_height := size.y * 0.24
+		draw_rect(Rect2(0.0, 0.0, size.x, vignette_height), Color(0.0, 0.0, 0.0, 0.16), true)
+		draw_rect(Rect2(0.0, size.y - vignette_height, size.x, vignette_height), Color(0.0, 0.0, 0.0, 0.16), true)

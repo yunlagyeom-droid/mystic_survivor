@@ -1,6 +1,6 @@
-[gd_resource type="TileSet" format=3]
+[gd_resource type="TileSet" format=3 uid="uid://c6sdrbrdp2ajt"]
 
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city_v2/tilesets/rainy_city_tileset.png" id="1_pin2r"]
+[ext_resource type="Texture2D" uid="uid://bkcsvhj40vlsh" path="res://assets/maps/rainy_city_v2/tilesets/rainy_city_tileset.png" id="1_pin2r"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_cvich"]
 texture = ExtResource("1_pin2r")

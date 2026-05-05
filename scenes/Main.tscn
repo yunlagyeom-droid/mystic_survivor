@@ -1,17 +1,17 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene format=3 uid="uid://oxl87ri0l51q"]
 
-[ext_resource type="Script" path="res://scripts/main.gd" id="main_script"]
+[ext_resource type="PackedScene" path="res://scenes/props/RoadBarricade.tscn" id="barricade_obstacle"]
+[ext_resource type="PackedScene" path="res://scenes/props/AbandonedCar.tscn" id="car_obstacle"]
+[ext_resource type="Texture2D" uid="uid://c5aj2poxxbu00" path="res://assets/maps/rainy_city_v2/source/rainy_city_generated_master.png" id="city_master"]
+[ext_resource type="TileSet" uid="uid://c6sdrbrdp2ajt" path="res://assets/maps/rainy_city_v2/tilesets/rainy_city_tileset.tres" id="city_tileset"]
+[ext_resource type="PackedScene" path="res://scenes/ExperienceGem.tscn" id="gem_scene"]
+[ext_resource type="Script" uid="uid://cwxbtshbpgudy" path="res://scripts/main.gd" id="main_script"]
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="player_scene"]
 [ext_resource type="PackedScene" path="res://scenes/Slime.tscn" id="slime_scene"]
-[ext_resource type="PackedScene" path="res://scenes/ExperienceGem.tscn" id="gem_scene"]
-[ext_resource type="PackedScene" path="res://scenes/props/AbandonedCar.tscn" id="car_obstacle"]
-[ext_resource type="PackedScene" path="res://scenes/props/RoadBarricade.tscn" id="barricade_obstacle"]
-[ext_resource type="Texture2D" path="res://assets/maps/grass_fantasy/backgrounds/stage_grass_fantasy.png" id="stage_texture"]
-[ext_resource type="Texture2D" path="res://assets/players/mage/portraits/player_mage_ultimate_character.png" id="ultimate_cutin"]
-[ext_resource type="Texture2D" path="res://assets/maps/rainy_city_v2/source/rainy_city_generated_master.png" id="city_master"]
-[ext_resource type="TileSet" path="res://assets/maps/rainy_city_v2/tilesets/rainy_city_tileset.tres" id="city_tileset"]
+[ext_resource type="Texture2D" uid="uid://cdpy4sccunyp2" path="res://assets/maps/grass_fantasy/backgrounds/stage_grass_fantasy.png" id="stage_texture"]
+[ext_resource type="Texture2D" uid="uid://bjr3oq3p8q16h" path="res://assets/players/mage/portraits/player_mage_ultimate_character.png" id="ultimate_cutin"]
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=1271115251]
 script = ExtResource("main_script")
 slime_scene = ExtResource("slime_scene")
 experience_gem_scene = ExtResource("gem_scene")
@@ -21,26 +21,26 @@ city_tile_set = ExtResource("city_tileset")
 city_master_texture = ExtResource("city_master")
 ultimate_cutin_texture = ExtResource("ultimate_cutin")
 
-[node name="Background" type="Node2D" parent="."]
+[node name="Background" type="Node2D" parent="." unique_id=1654884838]
 z_index = -100
 
-[node name="CityTileMap" type="TileMapLayer" parent="Background"]
+[node name="CityTileMap" type="TileMapLayer" parent="Background" unique_id=711537268]
 tile_set = ExtResource("city_tileset")
 
-[node name="GemContainer" type="Node2D" parent="."]
+[node name="GemContainer" type="Node2D" parent="." unique_id=1251540582]
 
-[node name="EnemyContainer" type="Node2D" parent="."]
+[node name="EnemyContainer" type="Node2D" parent="." unique_id=232157812]
 
-[node name="ObstacleContainer" type="Node2D" parent="."]
+[node name="ObstacleContainer" type="Node2D" parent="." unique_id=1742962559]
 y_sort_enabled = true
 
-[node name="ProjectileContainer" type="Node2D" parent="."]
+[node name="ProjectileContainer" type="Node2D" parent="." unique_id=1763388077]
 
-[node name="UltimateVfxContainer" type="Node2D" parent="."]
+[node name="UltimateVfxContainer" type="Node2D" parent="." unique_id=385476705]
 z_index = 90
 
-[node name="Player" parent="." instance=ExtResource("player_scene")]
+[node name="Player" parent="." unique_id=1091003479 instance=ExtResource("player_scene")]
 
-[node name="SpawnTimer" type="Timer" parent="."]
+[node name="SpawnTimer" type="Timer" parent="." unique_id=59254639]
 wait_time = 0.22
 autostart = true

@@ -1,8 +1,8 @@
 extends Node
 
-signal projectile_requested(projectile_scene: PackedScene, origin: Vector2, direction: Vector2, damage: int)
+signal projectile_requested(projectile_scene: PackedScene, origin: Vector2, direction: Vector2, damage: int, params: Dictionary)
 signal world_vfx_requested(vfx: Node2D)
-signal status_changed(skill_1_text: String, skill_2_text: String)
+signal status_changed(skill_1_text: String, skill_2_text: String, skill_3_text: String)
 
 const FIREBALL_SCENE := preload("res://scenes/Fireball.tscn")
 const BLINK_VFX_TEXTURE := preload("res://assets/players/mage/skills/blink/mage_blink_vfx_sheet.png")
@@ -72,6 +72,10 @@ func try_skill_2(_input_direction: Vector2) -> void:
 	_try_barrier()
 
 
+func try_skill_3(_input_direction: Vector2) -> void:
+	pass
+
+
 func set_experiment_mode(enabled: bool) -> void:
 	experiment_mode = enabled
 	if experiment_mode:
@@ -86,9 +90,23 @@ func _reset_experiment_cooldowns() -> void:
 	barrier_timer = 0.0
 
 
+func reset_upgrades() -> void:
+	fireball_damage = 18
+	attack_cooldown = 0.85
+	blink_distance = 260.0
+	blink_max_charges = 1
+	blink_charges = mini(blink_charges, blink_max_charges)
+	blink_arrival_damage = 0
+	barrier_duration = 1.2
+	barrier_shield_max = 45
+	barrier_shield_current = mini(barrier_shield_current, barrier_shield_max) if _is_barrier_active() else 0
+	barrier_explosion_damage = 0
+	_emit_status()
+
+
 func use_ultimate(context: Dictionary) -> void:
 	var targets: Array[Node2D] = context.get("targets", [])
-	var damage := int(context.get("damage", 120))
+	var damage := _get_modified_attack_damage(int(context.get("damage", 120)))
 	_spawn_ultimate_vfx(context.get("origin", player.global_position), targets)
 	for target in targets:
 		if not is_instance_valid(target):
@@ -217,7 +235,7 @@ func get_status_texts() -> Array[String]:
 	elif barrier_timer > 0.0:
 		barrier_text = "배리어 %.1f초" % barrier_timer
 
-	return [blink_text, barrier_text]
+	return [blink_text, barrier_text, ""]
 
 
 func modify_incoming_damage(amount: int) -> int:
@@ -261,8 +279,8 @@ func _try_fireball() -> void:
 	if direction == Vector2.ZERO:
 		direction = Vector2.RIGHT
 
-	projectile_requested.emit(FIREBALL_SCENE, player.global_position + direction * 40.0, direction, fireball_damage)
-	attack_timer = 0.0 if experiment_mode else attack_cooldown
+	projectile_requested.emit(FIREBALL_SCENE, player.global_position + direction * 40.0, direction, _get_modified_attack_damage(fireball_damage), {})
+	attack_timer = 0.0 if experiment_mode else _get_basic_attack_cooldown(attack_cooldown)
 
 
 func _try_blink(input_direction: Vector2) -> void:
@@ -610,7 +628,7 @@ func _barrier_state_column(shield_ratio: float) -> int:
 
 func _emit_status() -> void:
 	var texts := get_status_texts()
-	status_changed.emit(texts[0], texts[1])
+	status_changed.emit(texts[0], texts[1], texts[2])
 
 
 func find_nearest_enemy() -> Node2D:
@@ -634,6 +652,7 @@ func find_nearest_enemy() -> Node2D:
 
 
 func apply_area_damage(world_position: Vector2, radius: float, damage: int, source := "skill") -> void:
+	var final_damage := _get_modified_attack_damage(damage)
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if not is_instance_valid(enemy):
 			continue
@@ -644,7 +663,19 @@ func apply_area_damage(world_position: Vector2, radius: float, damage: int, sour
 		if enemy_node.global_position.distance_to(world_position) > radius:
 			continue
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(damage, source)
+			enemy.take_damage(final_damage, source)
+
+
+func _get_modified_attack_damage(base_damage: int) -> int:
+	if player != null and player.has_method("get_modified_attack_damage"):
+		return player.get_modified_attack_damage(base_damage)
+	return base_damage
+
+
+func _get_basic_attack_cooldown(base_cooldown: float) -> float:
+	if player != null and player.has_method("get_basic_attack_cooldown"):
+		return player.get_basic_attack_cooldown(base_cooldown)
+	return base_cooldown
 
 
 func make_circle_points(radius: float, segments: int) -> PackedVector2Array:

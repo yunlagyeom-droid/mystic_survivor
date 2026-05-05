@@ -1,0 +1,19 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/hunter_sword_wave.gd" id="1_sword_wave_script"]
+[ext_resource type="Texture2D" path="res://assets/players/hunter/skills/variants/hunter_sword_wave_basic_crescent_v1.png" id="2_sword_wave_texture"]
+
+[sub_resource type="RectangleShape2D" id="sword_wave_shape"]
+size = Vector2(260, 108)
+
+[node name="HunterSwordWave" type="Area2D"]
+collision_layer = 4
+collision_mask = 2
+script = ExtResource("1_sword_wave_script")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(0.2, 0.2)
+texture = ExtResource("2_sword_wave_texture")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("sword_wave_shape")

@@ -1,8 +1,8 @@
 extends Node
 
-signal projectile_requested(projectile_scene: PackedScene, origin: Vector2, direction: Vector2, damage: int)
+signal projectile_requested(projectile_scene: PackedScene, origin: Vector2, direction: Vector2, damage: int, params: Dictionary)
 signal world_vfx_requested(vfx: Node2D)
-signal status_changed(skill_1_text: String, skill_2_text: String)
+signal status_changed(skill_1_text: String, skill_2_text: String, skill_3_text: String)
 
 var player: Node
 
@@ -23,6 +23,10 @@ func try_skill_2(_input_direction: Vector2) -> void:
 	pass
 
 
+func try_skill_3(_input_direction: Vector2) -> void:
+	pass
+
+
 func use_ultimate(_context: Dictionary) -> void:
 	pass
 
@@ -40,7 +44,7 @@ func get_upgrade_pool() -> Array[Dictionary]:
 
 
 func get_status_texts() -> Array[String]:
-	return ["", ""]
+	return ["", "", ""]
 
 
 func modify_incoming_damage(amount: int) -> int:

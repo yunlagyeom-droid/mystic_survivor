@@ -13,7 +13,7 @@ func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 
 
-func setup(origin: Vector2, travel_direction: Vector2, attack_damage: int) -> void:
+func setup(origin: Vector2, travel_direction: Vector2, attack_damage: int, _params := {}) -> void:
 	global_position = origin
 	direction = travel_direction.normalized()
 	if direction == Vector2.ZERO:

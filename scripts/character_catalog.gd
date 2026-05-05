@@ -6,7 +6,7 @@ const GAME_SCENE_PATH := "res://scenes/Main.tscn"
 
 
 static func get_characters() -> Array:
-	var characters := [
+	return [
 		{
 			"id": "mage",
 			"name": "마법사",
@@ -79,7 +79,7 @@ static func get_characters() -> Array:
 			"sprite_position": Vector2(0.0, -8.0),
 			"sprite_columns": 8,
 			"sprite_rows": 8,
-			"idle_sheet": "res://assets/players/hunter/sprites/combat/hunter_combat_idle_v1.png",
+			"idle_sheet": "res://assets/players/hunter/sprites/v5/hunter_idle_v5.png",
 			"idle_columns": 4,
 			"idle_rows": 8,
 			"idle_fps": 4.0,
@@ -87,11 +87,6 @@ static func get_characters() -> Array:
 			"walk_columns": 8,
 			"walk_rows": 8,
 			"walk_fps": 10.0,
-			"attack_sheet": "res://assets/players/hunter/sprites/combat/hunter_combat_attack_slash_v1.png",
-			"attack_columns": 6,
-			"attack_rows": 8,
-			"attack_fps": 18.0,
-			"attack_duration": 0.34,
 			"combat_script": "res://scripts/combat/hunter_combat.gd",
 			"ultimate_cutin_image": "res://assets/players/hunter/portraits/player_hunter_ultimate_character.png",
 			"ultimate_cutin_side": "right",
@@ -111,33 +106,40 @@ static func get_characters() -> Array:
 			"accent_color": Color(0.98, 0.58, 0.48),
 			"skills": [
 				{
-					"name": "에너지 슬래시",
-					"description": "붉은 에너지 검격으로 전방의 적을 베어냅니다.",
+					"name": "섀도 스텝",
+					"description": "짧은 거리를 빠르게 돌파해 위험한 위치를 벗어납니다.",
 					"icon_label": "◇",
-					"icon_shape": "slash",
-					"icon_path": "",
-					"color": Color(1.0, 0.12, 0.12),
-				},
-				{
-					"name": "섀도우 스텝",
-					"description": "짧은 순간 그림자처럼 이동해 위험을 벗어납니다.",
-					"icon_label": "◆",
 					"icon_shape": "step",
-					"icon_path": "",
+					"icon_path": "res://assets/ui/hud/hunter_skill_dash_casual_v2.png",
 					"color": Color(0.65, 0.08, 0.1),
 				},
 				{
-					"name": "익스큐션 프로토콜",
-					"description": "처형 명령을 내려 표적에게 강력한 일격을 가합니다.",
+					"name": "카운터 엣지",
+					"description": "적의 공격 타이밍에 맞춰 검으로 받아치고 빈틈을 만듭니다.",
+					"icon_label": "◆",
+					"icon_shape": "guard",
+					"icon_path": "res://assets/ui/hud/hunter_skill_parry_casual_v2.png",
+					"color": Color(1.0, 0.38, 0.22),
+				},
+				{
+					"name": "레드 아크",
+					"description": "붉은 에너지 검기를 날려 전방의 적을 베어냅니다.",
 					"icon_label": "▣",
-					"icon_shape": "protocol",
-					"icon_path": "",
+					"icon_shape": "slash",
+					"icon_path": "res://assets/ui/hud/hunter_skill_sword_wave_casual_v2.png",
 					"color": Color(1.0, 0.28, 0.18),
+				},
+				{
+					"name": "블레이드 오버로드",
+					"description": "궁극기 게이지를 소모해 에너지소드를 과충전하고 처형 모드에 돌입합니다.",
+					"icon_label": "✦",
+					"icon_shape": "protocol",
+					"icon_path": "res://assets/ui/hud/hunter_skill_ultimate_overload_casual_v1.png",
+					"color": Color(1.0, 0.42, 0.18),
 				},
 			],
 		},
 	]
-	return characters
 
 
 static func get_slot_count() -> int:

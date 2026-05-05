@@ -1,13 +1,53 @@
 class_name Player
 extends CharacterBody2D
 
-signal projectile_requested(projectile_scene: PackedScene, origin: Vector2, direction: Vector2, damage: int)
+signal projectile_requested(projectile_scene: PackedScene, origin: Vector2, direction: Vector2, damage: int, params: Dictionary)
 signal world_vfx_requested(vfx: Node2D)
 signal health_changed(current_health: int, max_health: int)
 signal experience_changed(current_experience: int, required_experience: int, level: int)
 signal level_up_ready(level: int)
-signal combat_status_changed(skill_1_text: String, skill_2_text: String)
+signal combat_status_changed(skill_1_text: String, skill_2_text: String, skill_3_text: String)
 signal died
+
+const COMMON_UPGRADE_MAX_LEVEL := 10
+const COMMON_UPGRADE_DEFINITIONS := {
+	"common_attack_damage": {
+		"label": "공격력 강화",
+		"description": "모든 공격 피해 +10%",
+		"skill_id": "attack_damage",
+		"icon_path": "res://assets/ui/hud/common_attack_damage_casual_v1.png",
+	},
+	"common_attack_speed": {
+		"label": "공격속도 강화",
+		"description": "기본공격 속도 +5%",
+		"skill_id": "attack_speed",
+		"icon_path": "res://assets/ui/hud/common_attack_speed_casual_v1.png",
+	},
+	"common_move_speed": {
+		"label": "이동속도 강화",
+		"description": "이동속도 +2%",
+		"skill_id": "move_speed",
+		"icon_path": "res://assets/ui/hud/common_move_speed_casual_v1.png",
+	},
+	"common_max_health": {
+		"label": "체력 강화",
+		"description": "최대체력 +10%",
+		"skill_id": "max_health",
+		"icon_path": "res://assets/ui/hud/common_max_health_casual_v1.png",
+	},
+	"common_experience_gain": {
+		"label": "경험치 획득량 강화",
+		"description": "경험치 획득량 +10%",
+		"skill_id": "experience_gain",
+		"icon_path": "res://assets/ui/hud/common_experience_gain_casual_v1.png",
+	},
+	"common_luck": {
+		"label": "행운 강화",
+		"description": "아이템 드랍 행운 +10%",
+		"skill_id": "luck",
+		"icon_path": "res://assets/ui/hud/common_luck_casual_v1.png",
+	},
+}
 
 @export var move_speed := 260.0
 @export var max_health := 100
@@ -26,7 +66,19 @@ var current_health := 100
 var level := 1
 var experience := 0
 var required_experience := 6
+var base_move_speed := 260.0
+var base_max_health := 100
+var experience_gain_remainder := 0.0
+var common_upgrade_levels := {
+	"common_attack_damage": 0,
+	"common_attack_speed": 0,
+	"common_move_speed": 0,
+	"common_max_health": 0,
+	"common_experience_gain": 0,
+	"common_luck": 0,
+}
 var invulnerable_timer := 0.0
+var movement_lock_timer := 0.0
 var walk_distance := 0.0
 var walk_animation_time := 0.0
 var idle_animation_time := 0.0
@@ -46,6 +98,15 @@ var attack_columns := 0
 var attack_rows := 0
 var attack_fps := 18.0
 var attack_duration := 0.34
+var weapon_texture: Texture2D
+var weapon_columns := 0
+var weapon_rows := 0
+var weapon_fps := 18.0
+var weapon_duration := 0.34
+var weapon_rotation_offset := 0.0
+var weapon_action_elapsed := 0.0
+var weapon_action_duration := 0.0
+var weapon_action_direction := Vector2.DOWN
 var action_name := ""
 var action_elapsed := 0.0
 var action_duration := 0.0
@@ -60,9 +121,12 @@ var combat: Node
 var combat_modulate := Color.WHITE
 
 @onready var sprite: Sprite2D = $Sprite2D
+@onready var weapon_sprite: Sprite2D = $WeaponSprite2D
 
 
 func _ready() -> void:
+	base_move_speed = move_speed
+	base_max_health = max_health
 	current_health = max_health
 	required_experience = level_required_base
 	add_to_group("player")
@@ -82,16 +146,20 @@ func _physics_process(delta: float) -> void:
 		combat.try_skill_1(input_direction)
 	if Input.is_action_just_pressed("barrier") and combat != null:
 		combat.try_skill_2(input_direction)
+	if Input.is_action_just_pressed("sword_wave") and combat != null:
+		combat.try_skill_3(input_direction)
 
+	movement_lock_timer = maxf(0.0, movement_lock_timer - delta)
+	var movement_direction := Vector2.ZERO if movement_lock_timer > 0.0 else input_direction
 	var previous_position := global_position
-	velocity = input_direction * move_speed
+	velocity = movement_direction * get_move_speed()
 	move_and_slide()
 
 	global_position.x = clampf(global_position.x, -world_radius, world_radius)
 	global_position.y = clampf(global_position.y, -world_radius, world_radius)
 
 	var moved_distance := previous_position.distance_to(global_position)
-	update_walk_animation(input_direction, moved_distance, delta)
+	update_walk_animation(movement_direction, moved_distance, delta)
 
 	invulnerable_timer = maxf(0.0, invulnerable_timer - delta)
 	if combat != null:
@@ -127,7 +195,13 @@ func add_experience(amount: int) -> void:
 	if is_dead:
 		return
 
-	experience += amount
+	var gained_experience := float(amount) * get_experience_gain_multiplier() + experience_gain_remainder
+	var whole_experience := int(floor(gained_experience))
+	experience_gain_remainder = gained_experience - float(whole_experience)
+	if whole_experience <= 0:
+		return
+
+	experience += whole_experience
 	while experience >= required_experience:
 		experience -= required_experience
 		level += 1
@@ -138,29 +212,126 @@ func add_experience(amount: int) -> void:
 
 
 func apply_upgrade(upgrade_id: String) -> void:
-	match upgrade_id:
-		"health":
-			max_health += 25
-			current_health = mini(max_health, current_health + 35)
-		_:
-			if combat != null:
-				combat.apply_upgrade(upgrade_id)
+	if _is_common_upgrade(upgrade_id):
+		_apply_common_upgrade(upgrade_id)
+	elif combat != null:
+		combat.apply_upgrade(upgrade_id)
 
 	health_changed.emit(current_health, max_health)
 	experience_changed.emit(experience, required_experience, level)
 	_emit_combat_status()
 
 
+func reset_upgrades() -> void:
+	for upgrade_id in common_upgrade_levels.keys():
+		common_upgrade_levels[upgrade_id] = 0
+	move_speed = base_move_speed
+	max_health = base_max_health
+	current_health = mini(current_health, max_health)
+	experience_gain_remainder = 0.0
+	if combat != null and combat.has_method("reset_upgrades"):
+		combat.reset_upgrades()
+	health_changed.emit(current_health, max_health)
+	experience_changed.emit(experience, required_experience, level)
+	_emit_combat_status()
+
+
 func can_apply_upgrade(upgrade_id: String) -> bool:
+	if _is_common_upgrade(upgrade_id):
+		return int(common_upgrade_levels.get(upgrade_id, 0)) < COMMON_UPGRADE_MAX_LEVEL
 	if combat != null and combat.has_method("can_apply_upgrade"):
 		return combat.can_apply_upgrade(upgrade_id)
 	return true
+
+
+func get_common_upgrade_pool() -> Array[Dictionary]:
+	var upgrades: Array[Dictionary] = []
+	for upgrade_id in COMMON_UPGRADE_DEFINITIONS.keys():
+		var definition: Dictionary = COMMON_UPGRADE_DEFINITIONS[upgrade_id]
+		var current_level := int(common_upgrade_levels.get(upgrade_id, 0))
+		upgrades.append({
+			"id": upgrade_id,
+			"label": definition["label"],
+			"description": definition["description"],
+			"rarity": "Common",
+			"category": "common",
+			"character_id": "",
+			"skill_id": definition["skill_id"],
+			"icon_path": definition.get("icon_path", ""),
+			"upgrade_family": upgrade_id,
+			"level_current": current_level,
+			"level_max": COMMON_UPGRADE_MAX_LEVEL,
+		})
+	return upgrades
 
 
 func get_combat_upgrade_pool() -> Array[Dictionary]:
 	if combat == null or not combat.has_method("get_upgrade_pool"):
 		return []
 	return combat.get_upgrade_pool()
+
+
+func get_move_speed() -> float:
+	return base_move_speed * (1.0 + 0.02 * float(_get_common_upgrade_level("common_move_speed")))
+
+
+func get_attack_damage_multiplier() -> float:
+	return 1.0 + 0.1 * float(_get_common_upgrade_level("common_attack_damage"))
+
+
+func get_attack_speed_multiplier() -> float:
+	return 1.0 + 0.05 * float(_get_common_upgrade_level("common_attack_speed"))
+
+
+func get_experience_gain_multiplier() -> float:
+	return 1.0 + 0.1 * float(_get_common_upgrade_level("common_experience_gain"))
+
+
+func get_luck_multiplier() -> float:
+	return 1.0 + 0.1 * float(_get_common_upgrade_level("common_luck"))
+
+
+func get_ultimate_charge_multiplier() -> float:
+	if combat != null and combat.has_method("get_ultimate_charge_multiplier"):
+		return combat.get_ultimate_charge_multiplier()
+	return 1.0
+
+
+func try_ultimate_recast() -> bool:
+	if combat != null and combat.has_method("try_ultimate_recast"):
+		return combat.try_ultimate_recast()
+	return false
+
+
+func get_modified_attack_damage(base_damage: int) -> int:
+	if base_damage <= 0:
+		return 0
+	return maxi(1, int(round(float(base_damage) * get_attack_damage_multiplier())))
+
+
+func get_basic_attack_cooldown(base_cooldown: float) -> float:
+	return maxf(0.01, base_cooldown / get_attack_speed_multiplier())
+
+
+func _is_common_upgrade(upgrade_id: String) -> bool:
+	return COMMON_UPGRADE_DEFINITIONS.has(upgrade_id)
+
+
+func _get_common_upgrade_level(upgrade_id: String) -> int:
+	return int(common_upgrade_levels.get(upgrade_id, 0))
+
+
+func _apply_common_upgrade(upgrade_id: String) -> void:
+	if not can_apply_upgrade(upgrade_id):
+		return
+
+	common_upgrade_levels[upgrade_id] = _get_common_upgrade_level(upgrade_id) + 1
+	match upgrade_id:
+		"common_move_speed":
+			move_speed = get_move_speed()
+		"common_max_health":
+			max_health = int(round(float(base_max_health) * (1.0 + 0.1 * float(_get_common_upgrade_level(upgrade_id)))))
+			current_health = mini(current_health, max_health)
 
 
 func use_ultimate(context: Dictionary) -> void:
@@ -170,6 +341,10 @@ func use_ultimate(context: Dictionary) -> void:
 
 func set_invulnerable(duration: float) -> void:
 	invulnerable_timer = maxf(invulnerable_timer, duration)
+
+
+func lock_movement(duration: float) -> void:
+	movement_lock_timer = maxf(movement_lock_timer, duration)
 
 
 func set_combat_modulate(color: Color) -> void:
@@ -191,6 +366,7 @@ func play_action_animation(next_action_name: String, direction: Vector2, duratio
 		next_direction = Vector2.DOWN
 
 	last_attack_direction = next_direction
+	_start_weapon_animation(next_direction, attack_duration if duration <= 0.0 else duration)
 	if is_moving_now:
 		return
 
@@ -224,6 +400,7 @@ func update_walk_animation(input_direction: Vector2, moved_distance: float, delt
 		walk_animation_time = 0.0
 		idle_animation_time += delta
 
+	_update_weapon_animation(delta)
 	if _is_action_animation_active():
 		action_elapsed += delta
 		if action_elapsed >= action_duration:
@@ -291,6 +468,11 @@ func _load_optional_motion_sheets(character: Dictionary) -> void:
 	idle_texture = null
 	walk_texture = null
 	attack_texture = null
+	weapon_texture = null
+	weapon_action_elapsed = 0.0
+	weapon_action_duration = 0.0
+	if weapon_sprite != null:
+		weapon_sprite.visible = false
 	current_motion_sheet = ""
 
 	var idle_sheet_path := str(character.get("idle_sheet", ""))
@@ -314,6 +496,21 @@ func _load_optional_motion_sheets(character: Dictionary) -> void:
 		attack_rows = int(character.get("attack_rows", 8))
 		attack_fps = float(character.get("attack_fps", 18.0))
 		attack_duration = float(character.get("attack_duration", 0.34))
+
+	var weapon_sheet_path := str(character.get("weapon_attack_sheet", ""))
+	if not weapon_sheet_path.is_empty():
+		weapon_texture = load(weapon_sheet_path) as Texture2D
+		weapon_columns = int(character.get("weapon_attack_columns", 6))
+		weapon_rows = int(character.get("weapon_attack_rows", 1))
+		weapon_fps = float(character.get("weapon_attack_fps", attack_fps))
+		weapon_duration = float(character.get("weapon_attack_duration", attack_duration))
+		weapon_rotation_offset = deg_to_rad(float(character.get("weapon_rotation_offset_degrees", 0.0)))
+		if weapon_sprite != null:
+			weapon_sprite.texture = weapon_texture
+			weapon_sprite.hframes = weapon_columns
+			weapon_sprite.vframes = weapon_rows
+			weapon_sprite.position = sprite.position
+			weapon_sprite.scale = sprite.scale
 
 
 func _set_motion_sheet(motion: String) -> void:
@@ -383,6 +580,48 @@ func _finish_action_animation() -> void:
 	current_motion_sheet = ""
 
 
+func _start_weapon_animation(direction: Vector2, duration: float) -> void:
+	if weapon_texture == null or weapon_sprite == null:
+		return
+
+	weapon_action_direction = direction.normalized()
+	if weapon_action_direction == Vector2.ZERO:
+		weapon_action_direction = Vector2.DOWN
+	weapon_action_elapsed = 0.0
+	weapon_action_duration = weapon_duration if duration <= 0.0 else duration
+	weapon_sprite.visible = true
+	weapon_sprite.texture = weapon_texture
+	weapon_sprite.hframes = weapon_columns
+	weapon_sprite.vframes = weapon_rows
+	_apply_weapon_animation_frame()
+
+
+func _update_weapon_animation(delta: float) -> void:
+	if weapon_action_duration <= 0.0 or weapon_sprite == null:
+		return
+
+	weapon_action_elapsed += delta
+	if weapon_action_elapsed >= weapon_action_duration:
+		weapon_action_elapsed = 0.0
+		weapon_action_duration = 0.0
+		weapon_sprite.visible = false
+		return
+
+	_apply_weapon_animation_frame()
+
+
+func _apply_weapon_animation_frame() -> void:
+	if weapon_texture == null or weapon_sprite == null:
+		return
+
+	var columns := maxi(weapon_columns, 1)
+	var column := mini(int(weapon_action_elapsed * weapon_fps), columns - 1)
+	weapon_sprite.frame = column
+	weapon_sprite.position = sprite.position
+	weapon_sprite.scale = sprite.scale
+	weapon_sprite.rotation = weapon_action_direction.angle() + weapon_rotation_offset
+
+
 func _build_combat() -> void:
 	var character := GameState.get_selected_character()
 	var combat_script_path := str(character.get("combat_script", "res://scripts/combat/mage_combat.gd"))
@@ -406,25 +645,31 @@ func _build_combat() -> void:
 	combat.setup(self)
 
 
-func _on_combat_projectile_requested(projectile_scene: PackedScene, origin: Vector2, direction: Vector2, damage: int) -> void:
-	projectile_requested.emit(projectile_scene, origin, direction, damage)
+func _on_combat_projectile_requested(projectile_scene: PackedScene, origin: Vector2, direction: Vector2, damage: int, params: Dictionary) -> void:
+	projectile_requested.emit(projectile_scene, origin, direction, damage, params)
 
 
 func _on_combat_world_vfx_requested(vfx: Node2D) -> void:
 	world_vfx_requested.emit(vfx)
 
 
-func _on_combat_status_changed(skill_1_text: String, skill_2_text: String) -> void:
-	combat_status_changed.emit(skill_1_text, skill_2_text)
+func _on_combat_status_changed(skill_1_text: String, skill_2_text: String, skill_3_text: String) -> void:
+	combat_status_changed.emit(skill_1_text, skill_2_text, skill_3_text)
 
 
 func _emit_combat_status() -> void:
 	if combat == null:
-		combat_status_changed.emit("", "")
+		combat_status_changed.emit("", "", "")
 		return
 
 	var texts: Array = combat.get_status_texts()
-	combat_status_changed.emit(texts[0], texts[1])
+	combat_status_changed.emit(texts[0], texts[1], texts[2])
+
+
+func get_hud_skill_slots() -> Array[Dictionary]:
+	if combat != null and combat.has_method("get_hud_skill_slots"):
+		return combat.get_hud_skill_slots()
+	return []
 
 
 func _update_player_modulate() -> void:

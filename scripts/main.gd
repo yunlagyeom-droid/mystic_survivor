@@ -6,6 +6,8 @@ const CITY_TOP_CURB_ROW := -5
 const CITY_BOTTOM_CURB_ROW := 3
 const CITY_CENTERLINE_ROW := -1
 const CITY_CROSSWALK_COLUMN := -1
+const GothicWidgets := preload("res://scripts/ui/in_game_gothic_widgets.gd")
+const HUNTER_HUD_PORTRAIT_PATH := "res://assets/ui/hud/hunter_hud_portrait_face_v1.png"
 
 @export var slime_scene: PackedScene
 @export var experience_gem_scene: PackedScene
@@ -33,10 +35,12 @@ const CITY_CROSSWALK_COLUMN := -1
 @export var ultimate_max_targets := 36
 @export var ultimate_radius := 720.0
 @export var show_experiment_mode_button := true
+@export var show_dev_upgrade_tools := true
 
 var elapsed_time := 0.0
 var defeated_count := 0
 var ultimate_kills := 0
+var ultimate_charge_remainder := 0.0
 var ultimate_ready := false
 var ultimate_showing := false
 var suppress_ultimate_charge := false
@@ -44,17 +48,27 @@ var experiment_mode := false
 var game_over := false
 
 var canvas_layer: CanvasLayer
-var health_bar: ProgressBar
-var exp_bar: ProgressBar
+var health_bar
+var exp_bar
 var ultimate_bar: ProgressBar
+var ultimate_portrait_ring
 var level_label: Label
 var time_label: Label
 var defeated_label: Label
 var ultimate_label: Label
 var skill_1_label: Label
 var skill_2_label: Label
+var skill_3_label: Label
+var hunter_skill_slots_panel: Control
+var hunter_skill_slots: Array = []
 var experiment_mode_button: Button
-var level_up_panel: PanelContainer
+var dev_upgrade_panel: PanelContainer
+var dev_upgrade_selector: OptionButton
+var dev_upgrade_count_spinbox: SpinBox
+var dev_upgrade_status_label: Label
+var dev_upgrade_ids: Array[String] = []
+var dev_upgrade_focus_release_token := 0
+var level_up_panel: Control
 var level_up_title: Label
 var level_up_option_buttons: Array[Button] = []
 var current_level_up_options: Array[Dictionary] = []
@@ -99,6 +113,7 @@ func _ready() -> void:
 	_on_player_health_changed(player.current_health, player.max_health)
 	_on_player_experience_changed(player.experience, player.required_experience, player.level)
 	_update_ultimate_ui()
+	_update_hunter_skill_slots()
 
 
 func _process(delta: float) -> void:
@@ -109,6 +124,7 @@ func _process(delta: float) -> void:
 		elapsed_time += delta
 	time_label.text = _format_time(elapsed_time)
 	defeated_label.text = "처치: %d" % defeated_count
+	_update_hunter_skill_slots()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -142,14 +158,14 @@ func _spawn_enemy() -> void:
 		enemy.connect("defeated", _on_enemy_defeated)
 
 
-func _spawn_projectile(projectile_scene: PackedScene, origin: Vector2, direction: Vector2, damage: int) -> void:
+func _spawn_projectile(projectile_scene: PackedScene, origin: Vector2, direction: Vector2, damage: int, params: Dictionary) -> void:
 	if game_over or get_tree().paused or projectile_scene == null:
 		return
 
 	var projectile := projectile_scene.instantiate()
 	projectile_container.add_child(projectile)
 	if projectile.has_method("setup"):
-		projectile.setup(origin, direction, damage)
+		projectile.setup(origin, direction, damage, params)
 
 
 func _on_enemy_defeated(defeat_info: Dictionary) -> void:
@@ -161,7 +177,13 @@ func _on_enemy_defeated(defeat_info: Dictionary) -> void:
 	if counts_as_defeat:
 		defeated_count += 1
 	if charges_ultimate and not ultimate_showing and not ultimate_ready:
-		ultimate_kills = mini(ultimate_required_kills, ultimate_kills + 1)
+		var charge_gain := 1.0
+		if player != null and player.has_method("get_ultimate_charge_multiplier"):
+			charge_gain = player.get_ultimate_charge_multiplier()
+		var total_charge_gain := charge_gain + ultimate_charge_remainder
+		var whole_charge_gain := maxi(1, int(floor(total_charge_gain)))
+		ultimate_charge_remainder = total_charge_gain - float(whole_charge_gain)
+		ultimate_kills = mini(ultimate_required_kills, ultimate_kills + whole_charge_gain)
 		if ultimate_kills >= ultimate_required_kills:
 			ultimate_ready = true
 		_update_ultimate_ui()
@@ -211,11 +233,16 @@ func _build_obstacles() -> void:
 func _try_use_ultimate() -> void:
 	if game_over or ultimate_showing:
 		return
+	if player != null and player.has_method("try_ultimate_recast") and player.try_ultimate_recast():
+		_play_ultimate_screen_flash()
+		_shake_ultimate_camera()
+		return
 	if not debug_ultimate_always_ready and not ultimate_ready:
 		return
 
 	ultimate_ready = false
 	ultimate_kills = 0
+	ultimate_charge_remainder = 0.0
 	_update_ultimate_ui()
 	_use_ultimate()
 
@@ -303,8 +330,11 @@ func _show_next_level_up() -> void:
 		return
 
 	var new_level: int = pending_level_up_levels.pop_front()
-	level_up_title.text = "레벨 %d" % new_level
+	level_up_title.text = "LEVEL UP"
 	current_level_up_options = _roll_level_up_options(3)
+	var character := GameState.get_selected_character()
+	var theme_color: Color = character.get("theme_color", Color(0.48, 0.68, 1.0))
+	var accent_color: Color = character.get("accent_color", Color(0.95, 0.72, 0.46))
 	for index in range(level_up_option_buttons.size()):
 		var button := level_up_option_buttons[index]
 		if index >= current_level_up_options.size():
@@ -313,16 +343,25 @@ func _show_next_level_up() -> void:
 
 		var option := current_level_up_options[index]
 		button.visible = true
-		button.text = "[%s] %s\n%s" % [_get_rarity_display_name(option["rarity"]), option["label"], option["description"]]
-		button.modulate = _upgrade_rarity_color(option["rarity"])
+		button.text = ""
+		if button.has_method("set_option_data"):
+			button.set_option_data(option, index, theme_color, accent_color)
 
 	level_up_panel.visible = true
+	level_up_panel.modulate.a = 0.0
 	get_tree().paused = true
+	var tween := create_tween()
+	tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	tween.tween_property(level_up_panel, "modulate:a", 1.0, 0.16)
 
 
 func _choose_upgrade(upgrade_id: String) -> void:
 	player.apply_upgrade(upgrade_id)
 	if pending_level_up_levels.is_empty():
+		var tween := create_tween()
+		tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+		tween.tween_property(level_up_panel, "modulate:a", 0.0, 0.12)
+		await tween.finished
 		level_up_panel.visible = false
 		get_tree().paused = false
 	else:
@@ -357,9 +396,11 @@ func _roll_level_up_options(count: int) -> Array[Dictionary]:
 
 func _pick_upgrade_rarity() -> String:
 	var roll := randf()
-	if roll < 0.55:
+	if roll < 0.05:
+		return "Legendary"
+	if roll < 0.60:
 		return "Common"
-	if roll < 0.87:
+	if roll < 0.90:
 		return "Rare"
 	return "Epic"
 
@@ -382,17 +423,7 @@ func _get_upgrade_candidates(rarity: String, used_ids: Array[String]) -> Array[D
 
 
 func _get_upgrade_pool() -> Array[Dictionary]:
-	var upgrades: Array[Dictionary] = [
-		{
-			"id": "health",
-			"label": "체력 강화",
-			"description": "최대 체력 +25, 체력 35 회복",
-			"rarity": "Common",
-			"category": "common",
-			"character_id": "",
-			"skill_id": "stat",
-		},
-	]
+	var upgrades: Array[Dictionary] = player.get_common_upgrade_pool()
 	upgrades.append_array(player.get_combat_upgrade_pool())
 	return upgrades
 
@@ -403,6 +434,8 @@ func _upgrade_rarity_color(rarity: String) -> Color:
 			return Color(0.58, 0.82, 1.0)
 		"Epic":
 			return Color(0.95, 0.65, 1.0)
+		"Legendary":
+			return Color(1.0, 0.78, 0.22)
 		_:
 			return Color.WHITE
 
@@ -410,34 +443,62 @@ func _upgrade_rarity_color(rarity: String) -> Color:
 func _get_rarity_display_name(rarity: String) -> String:
 	match rarity:
 		"Rare":
-			return "희귀"
+			return "레어"
 		"Epic":
-			return "영웅"
+			return "에픽"
+		"Legendary":
+			return "레전더리"
 		_:
-			return "일반"
+			return "노말"
 
 
 func _on_player_health_changed(current_health: int, max_health: int) -> void:
 	if health_bar == null:
 		return
-	health_bar.max_value = max_health
-	health_bar.value = current_health
+	if health_bar.has_method("set_values"):
+		health_bar.set_values(current_health, max_health)
 
 
 func _on_player_experience_changed(current_experience: int, required_experience: int, level: int) -> void:
 	if exp_bar == null:
 		return
 	level_label.text = "레벨 %d" % level
-	exp_bar.max_value = required_experience
-	exp_bar.value = current_experience
+	if exp_bar.has_method("set_values"):
+		exp_bar.set_values(current_experience, required_experience)
 
 
-func _on_player_combat_status_changed(skill_1_text: String, skill_2_text: String) -> void:
-	if skill_1_label == null or skill_2_label == null:
+func _on_player_combat_status_changed(skill_1_text: String, skill_2_text: String, skill_3_text: String) -> void:
+	if skill_1_label == null or skill_2_label == null or skill_3_label == null:
 		return
 
 	skill_1_label.text = skill_1_text
 	skill_2_label.text = skill_2_text
+	skill_3_label.text = skill_3_text
+
+
+func _update_hunter_skill_slots() -> void:
+	if hunter_skill_slots_panel == null or not hunter_skill_slots_panel.visible:
+		return
+	if player == null or not player.has_method("get_hud_skill_slots"):
+		return
+
+	var slot_states: Array = player.get_hud_skill_slots()
+	for index in range(hunter_skill_slots.size()):
+		if index >= slot_states.size():
+			continue
+		var slot = hunter_skill_slots[index]
+		if slot == null or not slot.has_method("set_slot_state"):
+			continue
+		var state: Dictionary = slot_states[index]
+		slot.set_slot_state(
+			float(state.get("cooldown_remaining", 0.0)),
+			float(state.get("cooldown_total", 1.0)),
+			bool(state.get("ready", true)),
+			bool(state.get("active", false)),
+			bool(state.get("locked", false)),
+			int(state.get("charges", -1)),
+			int(state.get("max_charges", -1))
+		)
 
 
 func _on_player_died() -> void:
@@ -675,63 +736,88 @@ func _build_ui() -> void:
 	hud.set_anchors_preset(Control.PRESET_FULL_RECT)
 	canvas_layer.add_child(hud)
 
-	var top_margin := MarginContainer.new()
-	top_margin.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top_margin.offset_left = 18
-	top_margin.offset_top = 14
-	top_margin.offset_right = -18
-	top_margin.offset_bottom = 118
-	hud.add_child(top_margin)
+	var character := GameState.get_selected_character()
+	var theme_color: Color = character.get("theme_color", Color(0.48, 0.68, 1.0))
+	var accent_color: Color = character.get("accent_color", Color(0.95, 0.72, 0.46))
 
-	var top_row := HBoxContainer.new()
-	top_row.add_theme_constant_override("separation", 16)
-	top_margin.add_child(top_row)
+	var hud_frame := Control.new()
+	hud_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud_frame.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	hud_frame.offset_left = 18
+	hud_frame.offset_top = 18
+	hud_frame.offset_right = 690
+	hud_frame.offset_bottom = 160
+	hud.add_child(hud_frame)
+
+	ultimate_portrait_ring = GothicWidgets.UltimatePortraitRing.new()
+	ultimate_portrait_ring.custom_minimum_size = Vector2(138, 138)
+	ultimate_portrait_ring.position = Vector2(0, 0)
+	ultimate_portrait_ring.size = Vector2(138, 138)
+	hud_frame.add_child(ultimate_portrait_ring)
+	var portrait_texture := _load_hud_portrait_texture(character)
+	ultimate_portrait_ring.configure(portrait_texture, _get_hud_portrait_region(character, portrait_texture), Color(0.18, 0.62, 1.0))
 
 	var bars := VBoxContainer.new()
-	bars.custom_minimum_size = Vector2(360, 92)
-	top_row.add_child(bars)
+	bars.position = Vector2(140, 24)
+	bars.size = Vector2(460, 90)
+	bars.add_theme_constant_override("separation", 8)
+	hud_frame.add_child(bars)
 
-	health_bar = ProgressBar.new()
-	health_bar.custom_minimum_size = Vector2(360, 24)
-	health_bar.show_percentage = false
-	health_bar.modulate = Color(1.0, 0.35, 0.35)
+	health_bar = GothicWidgets.GothicProgressBar.new()
+	health_bar.custom_minimum_size = Vector2(460, 30)
+	health_bar.configure("HP", Color(0.82, 0.05, 0.08, 0.95), accent_color)
 	bars.add_child(health_bar)
 
-	exp_bar = ProgressBar.new()
-	exp_bar.custom_minimum_size = Vector2(360, 18)
-	exp_bar.show_percentage = false
-	exp_bar.modulate = Color(0.4, 0.85, 1.0)
+	exp_bar = GothicWidgets.GothicProgressBar.new()
+	exp_bar.custom_minimum_size = Vector2(460, 26)
+	exp_bar.configure("EXP", Color(0.12, 0.58, 1.0, 0.95), Color(0.2, 0.72, 1.0))
 	bars.add_child(exp_bar)
 
-	ultimate_bar = ProgressBar.new()
-	ultimate_bar.custom_minimum_size = Vector2(360, 18)
-	ultimate_bar.show_percentage = false
-	ultimate_bar.modulate = Color(0.95, 0.75, 1.0)
-	bars.add_child(ultimate_bar)
-
 	level_label = Label.new()
-	level_label.custom_minimum_size = Vector2(110, 24)
-	top_row.add_child(level_label)
-
-	time_label = Label.new()
-	time_label.custom_minimum_size = Vector2(90, 24)
-	top_row.add_child(time_label)
-
-	defeated_label = Label.new()
-	defeated_label.custom_minimum_size = Vector2(150, 24)
-	top_row.add_child(defeated_label)
+	level_label.position = Vector2(140, 108)
+	level_label.size = Vector2(110, 30)
+	level_label.add_theme_font_size_override("font_size", 25)
+	level_label.add_theme_color_override("font_color", Color(0.94, 0.86, 0.68))
+	hud_frame.add_child(level_label)
 
 	ultimate_label = Label.new()
-	ultimate_label.custom_minimum_size = Vector2(180, 24)
-	top_row.add_child(ultimate_label)
+	ultimate_label.position = Vector2(258, 111)
+	ultimate_label.size = Vector2(250, 26)
+	ultimate_label.add_theme_font_size_override("font_size", 18)
+	ultimate_label.add_theme_color_override("font_color", Color(0.72, 0.9, 1.0))
+	hud_frame.add_child(ultimate_label)
 
-	skill_1_label = Label.new()
-	skill_1_label.custom_minimum_size = Vector2(130, 24)
-	top_row.add_child(skill_1_label)
+	time_label = Label.new()
+	time_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	time_label.offset_top = 18
+	time_label.offset_bottom = 64
+	time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	time_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	time_label.add_theme_font_size_override("font_size", 34)
+	time_label.add_theme_color_override("font_color", Color(0.94, 0.9, 0.84))
+	hud.add_child(time_label)
 
-	skill_2_label = Label.new()
-	skill_2_label.custom_minimum_size = Vector2(130, 24)
-	top_row.add_child(skill_2_label)
+	var right_status := VBoxContainer.new()
+	right_status.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	right_status.offset_left = -430
+	right_status.offset_top = 24
+	right_status.offset_right = -22
+	right_status.offset_bottom = 146
+	right_status.add_theme_constant_override("separation", 8)
+	hud.add_child(right_status)
+
+	defeated_label = _make_hud_status_label(accent_color)
+	right_status.add_child(defeated_label)
+
+	skill_1_label = _make_hud_status_label(theme_color)
+	right_status.add_child(skill_1_label)
+
+	skill_2_label = _make_hud_status_label(theme_color)
+	right_status.add_child(skill_2_label)
+
+	skill_3_label = _make_hud_status_label(theme_color)
+	right_status.add_child(skill_3_label)
+	_build_hunter_skill_slots(hud, character, theme_color, accent_color)
 
 	if show_experiment_mode_button:
 		experiment_mode_button = Button.new()
@@ -740,40 +826,363 @@ func _build_ui() -> void:
 		experiment_mode_button.toggle_mode = true
 		experiment_mode_button.text = "DEV TEST: OFF"
 		experiment_mode_button.toggled.connect(_set_experiment_mode)
-		top_row.add_child(experiment_mode_button)
+		experiment_mode_button.position = Vector2(520, 110)
+		hud_frame.add_child(experiment_mode_button)
 
+	_build_dev_upgrade_panel(hud)
 	_build_level_up_panel(hud)
 	_build_game_over_panel(hud)
 	_build_ultimate_overlay(hud)
 
 
-func _build_level_up_panel(parent: Control) -> void:
-	level_up_panel = PanelContainer.new()
-	level_up_panel.process_mode = Node.PROCESS_MODE_ALWAYS
-	level_up_panel.visible = false
-	level_up_panel.custom_minimum_size = Vector2(520, 340)
-	level_up_panel.set_anchors_preset(Control.PRESET_CENTER)
-	level_up_panel.offset_left = -260
-	level_up_panel.offset_top = -170
-	level_up_panel.offset_right = 260
-	level_up_panel.offset_bottom = 170
-	parent.add_child(level_up_panel)
+func _build_hunter_skill_slots(parent: Control, character: Dictionary, theme_color: Color, accent_color: Color) -> void:
+	hunter_skill_slots_panel = Control.new()
+	hunter_skill_slots_panel.visible = str(character.get("id", "")) == "hunter"
+	hunter_skill_slots_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	hunter_skill_slots_panel.offset_left = 20
+	hunter_skill_slots_panel.offset_top = -158
+	hunter_skill_slots_panel.offset_right = 424
+	hunter_skill_slots_panel.offset_bottom = -20
+	parent.add_child(hunter_skill_slots_panel)
+
+	var title := Label.new()
+	title.text = "SKILLS"
+	title.position = Vector2(4, 0)
+	title.size = Vector2(390, 26)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 19)
+	title.add_theme_color_override("font_color", Color(0.88, 0.78, 0.62))
+	hunter_skill_slots_panel.add_child(title)
+
+	var row := HBoxContainer.new()
+	row.position = Vector2(0, 30)
+	row.size = Vector2(400, 108)
+	row.add_theme_constant_override("separation", 22)
+	hunter_skill_slots_panel.add_child(row)
+
+	hunter_skill_slots.clear()
+	if not hunter_skill_slots_panel.visible:
+		return
+
+	var slot_data := [
+		{"label": "DASH", "path": "res://assets/ui/hud/hunter_skill_dash_casual_v2.png"},
+		{"label": "PARRY", "path": "res://assets/ui/hud/hunter_skill_parry_casual_v2.png"},
+		{"label": "WAVE", "path": "res://assets/ui/hud/hunter_skill_sword_wave_casual_v2.png"},
+	]
+	for data in slot_data:
+		var slot := GothicWidgets.SkillCooldownSlot.new()
+		slot.custom_minimum_size = Vector2(116, 108)
+		hunter_skill_slots.append(slot)
+		row.add_child(slot)
+		slot.configure(str(data["label"]), _load_image_texture(str(data["path"])), accent_color)
+
+	skill_1_label.visible = false
+	skill_2_label.visible = false
+	skill_3_label.visible = false
+
+
+func _make_hud_status_label(accent_color: Color) -> Label:
+	var label := Label.new()
+	label.custom_minimum_size = Vector2(390, 24)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 18)
+	label.add_theme_color_override("font_color", Color(0.9, 0.86, 0.8))
+	label.add_theme_stylebox_override("normal", _make_gothic_panel_style(Color(0.0, 0.0, 0.0, 0.34), Color(accent_color.r, accent_color.g, accent_color.b, 0.24), 1))
+	return label
+
+
+func _load_hud_portrait_texture(character: Dictionary) -> Texture2D:
+	if str(character.get("id", "")) == "hunter":
+		var hunter_texture := _load_image_texture(HUNTER_HUD_PORTRAIT_PATH)
+		if hunter_texture != null:
+			return hunter_texture
+
+	var portrait_paths := [
+		str(character.get("ultimate_cutin_image", "")),
+		str(character.get("detail_image", "")),
+		str(character.get("card_image", "")),
+	]
+	for path in portrait_paths:
+		if path.is_empty():
+			continue
+		var loaded := load(path) as Texture2D
+		if loaded != null:
+			return loaded
+		loaded = _load_image_texture(path)
+		if loaded != null:
+			return loaded
+	return ultimate_cutin_texture
+
+
+func _load_image_texture(path: String) -> Texture2D:
+	var image := Image.new()
+	if image.load(path) != OK:
+		return null
+	return ImageTexture.create_from_image(image)
+
+
+func _get_hud_portrait_region(character: Dictionary, texture: Texture2D) -> Rect2:
+	if texture == null:
+		return Rect2()
+	return Rect2()
+
+
+func _make_gothic_panel_style(fill_color: Color, border_color: Color, border_width: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.set_border_width_all(border_width)
+	style.set_corner_radius_all(2)
+	style.content_margin_left = 8
+	style.content_margin_right = 8
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	return style
+
+
+# DEV TEST UPGRADE TOOL START
+func _build_dev_upgrade_panel(parent: Control) -> void:
+	if not show_dev_upgrade_tools:
+		return
+
+	dev_upgrade_panel = PanelContainer.new()
+	dev_upgrade_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	dev_upgrade_panel.visible = false
+	dev_upgrade_panel.custom_minimum_size = Vector2(650, 86)
+	dev_upgrade_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	dev_upgrade_panel.offset_left = 16
+	dev_upgrade_panel.offset_top = 170
+	dev_upgrade_panel.offset_right = 666
+	dev_upgrade_panel.offset_bottom = 256
+	parent.add_child(dev_upgrade_panel)
 
 	var content := VBoxContainer.new()
-	content.add_theme_constant_override("separation", 12)
+	content.add_theme_constant_override("separation", 6)
+	dev_upgrade_panel.add_child(content)
+
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 8)
+	content.add_child(top)
+
+	var title := Label.new()
+	title.text = "DEV Upgrade"
+	title.custom_minimum_size = Vector2(96, 28)
+	top.add_child(title)
+
+	dev_upgrade_selector = OptionButton.new()
+	dev_upgrade_selector.custom_minimum_size = Vector2(250, 30)
+	dev_upgrade_selector.focus_mode = Control.FOCUS_NONE
+	top.add_child(dev_upgrade_selector)
+
+	dev_upgrade_count_spinbox = SpinBox.new()
+	dev_upgrade_count_spinbox.min_value = 1
+	dev_upgrade_count_spinbox.max_value = 10
+	dev_upgrade_count_spinbox.step = 1
+	dev_upgrade_count_spinbox.value = 1
+	dev_upgrade_count_spinbox.custom_minimum_size = Vector2(70, 30)
+	dev_upgrade_count_spinbox.focus_mode = Control.FOCUS_NONE
+	top.add_child(dev_upgrade_count_spinbox)
+	var count_line_edit := dev_upgrade_count_spinbox.get_line_edit()
+	if count_line_edit != null:
+		count_line_edit.text_changed.connect(_on_dev_upgrade_count_text_changed)
+		count_line_edit.text_submitted.connect(_on_dev_upgrade_count_submitted)
+		count_line_edit.gui_input.connect(_on_dev_upgrade_count_gui_input)
+
+	var apply_button := Button.new()
+	apply_button.text = "Apply"
+	apply_button.custom_minimum_size = Vector2(72, 30)
+	apply_button.focus_mode = Control.FOCUS_NONE
+	apply_button.pressed.connect(_apply_dev_upgrade_selection)
+	top.add_child(apply_button)
+
+	var refresh_button := Button.new()
+	refresh_button.text = "Refresh"
+	refresh_button.custom_minimum_size = Vector2(78, 30)
+	refresh_button.focus_mode = Control.FOCUS_NONE
+	refresh_button.pressed.connect(_refresh_dev_upgrade_options_from_button)
+	top.add_child(refresh_button)
+
+	var reset_button := Button.new()
+	reset_button.text = "Reset Upgrades"
+	reset_button.custom_minimum_size = Vector2(120, 30)
+	reset_button.focus_mode = Control.FOCUS_NONE
+	reset_button.pressed.connect(_reset_dev_upgrades)
+	top.add_child(reset_button)
+
+	dev_upgrade_status_label = Label.new()
+	dev_upgrade_status_label.text = "Apply upgrades instantly in DEV TEST."
+	dev_upgrade_status_label.custom_minimum_size = Vector2(520, 24)
+	content.add_child(dev_upgrade_status_label)
+
+
+func _refresh_dev_upgrade_options_from_button() -> void:
+	_release_dev_upgrade_focus()
+	_refresh_dev_upgrade_options()
+
+
+func _refresh_dev_upgrade_options() -> void:
+	if dev_upgrade_selector == null:
+		return
+
+	var previous_id := ""
+	if dev_upgrade_selector.selected >= 0 and dev_upgrade_selector.selected < dev_upgrade_ids.size():
+		previous_id = dev_upgrade_ids[dev_upgrade_selector.selected]
+
+	dev_upgrade_selector.clear()
+	dev_upgrade_ids.clear()
+
+	var selected_character_id := str(GameState.get_selected_character().get("id", GameState.selected_character_id))
+	for option in _get_upgrade_pool():
+		var option_id := str(option.get("id", ""))
+		if option_id.is_empty():
+			continue
+		if str(option.get("category", "")) == "character" and str(option.get("character_id", "")) != selected_character_id:
+			continue
+		if player.has_method("can_apply_upgrade") and not player.can_apply_upgrade(option_id):
+			continue
+
+		var label := str(option.get("label", option_id))
+		var rarity := str(option.get("rarity", "Common"))
+		var skill_id := str(option.get("skill_id", ""))
+		dev_upgrade_selector.add_item("[%s] %s (%s)" % [rarity, label, skill_id])
+		dev_upgrade_ids.append(option_id)
+
+	if dev_upgrade_ids.is_empty():
+		dev_upgrade_selector.add_item("No available upgrades")
+		dev_upgrade_selector.disabled = true
+		if dev_upgrade_status_label != null:
+			dev_upgrade_status_label.text = "No available upgrades."
+		return
+
+	dev_upgrade_selector.disabled = false
+	var selected_index := dev_upgrade_ids.find(previous_id)
+	dev_upgrade_selector.select(maxi(selected_index, 0))
+	if dev_upgrade_status_label != null:
+		dev_upgrade_status_label.text = "Choose an upgrade and count, then press Apply."
+
+
+func _apply_dev_upgrade_selection() -> void:
+	_release_dev_upgrade_focus()
+	if player == null or dev_upgrade_selector == null or dev_upgrade_selector.disabled:
+		return
+	if dev_upgrade_selector.selected < 0 or dev_upgrade_selector.selected >= dev_upgrade_ids.size():
+		return
+
+	var upgrade_id := dev_upgrade_ids[dev_upgrade_selector.selected]
+	var requested_count := int(dev_upgrade_count_spinbox.value) if dev_upgrade_count_spinbox != null else 1
+	var applied_count := 0
+	for index in range(requested_count):
+		if player.has_method("can_apply_upgrade") and not player.can_apply_upgrade(upgrade_id):
+			break
+		player.apply_upgrade(upgrade_id)
+		applied_count += 1
+
+	_refresh_dev_upgrade_options()
+	if dev_upgrade_status_label != null:
+		dev_upgrade_status_label.text = "Applied %s x%d" % [upgrade_id, applied_count]
+
+
+func _reset_dev_upgrades() -> void:
+	_release_dev_upgrade_focus()
+	if player == null or not player.has_method("reset_upgrades"):
+		return
+	player.reset_upgrades()
+	_refresh_dev_upgrade_options()
+	if dev_upgrade_status_label != null:
+		dev_upgrade_status_label.text = "Reset upgrades."
+
+
+func _on_dev_upgrade_count_text_changed(_new_text: String) -> void:
+	dev_upgrade_focus_release_token += 1
+	var token := dev_upgrade_focus_release_token
+	await get_tree().create_timer(0.18).timeout
+	if token == dev_upgrade_focus_release_token:
+		_release_dev_upgrade_focus()
+
+
+func _on_dev_upgrade_count_submitted(_new_text: String) -> void:
+	_release_dev_upgrade_focus()
+
+
+func _on_dev_upgrade_count_gui_input(event: InputEvent) -> void:
+	var key_event := event as InputEventKey
+	if key_event == null or not key_event.pressed:
+		return
+	if key_event.keycode == KEY_ESCAPE or key_event.keycode == KEY_ENTER or key_event.keycode == KEY_KP_ENTER:
+		call_deferred("_release_dev_upgrade_focus")
+
+
+func _release_dev_upgrade_focus() -> void:
+	dev_upgrade_focus_release_token += 1
+	if dev_upgrade_count_spinbox != null:
+		var line_edit := dev_upgrade_count_spinbox.get_line_edit()
+		if line_edit != null:
+			line_edit.release_focus()
+	if dev_upgrade_selector != null:
+		dev_upgrade_selector.release_focus()
+	get_viewport().gui_release_focus()
+# DEV TEST UPGRADE TOOL END
+
+
+func _build_level_up_panel(parent: Control) -> void:
+	var character := GameState.get_selected_character()
+	var theme_color: Color = character.get("theme_color", Color(0.48, 0.68, 1.0))
+	var accent_color: Color = character.get("accent_color", Color(0.95, 0.72, 0.46))
+
+	level_up_panel = Control.new()
+	level_up_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	level_up_panel.visible = false
+	level_up_panel.modulate.a = 0.0
+	level_up_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	parent.add_child(level_up_panel)
+
+	var frame := GothicWidgets.GothicOverlayFrame.new()
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	frame.configure(theme_color, accent_color)
+	level_up_panel.add_child(frame)
+
+	var content := Control.new()
+	content.set_anchors_preset(Control.PRESET_CENTER)
+	content.offset_left = -500
+	content.offset_top = -286
+	content.offset_right = 500
+	content.offset_bottom = 286
 	level_up_panel.add_child(content)
 
 	level_up_title = Label.new()
+	level_up_title.position = Vector2(0, 0)
+	level_up_title.size = Vector2(1000, 72)
+	level_up_title.text = "LEVEL UP"
 	level_up_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	level_up_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	level_up_title.add_theme_font_size_override("font_size", 52)
+	level_up_title.add_theme_color_override("font_color", Color(0.96, 0.93, 0.86))
 	content.add_child(level_up_title)
+
+	var subtitle := Label.new()
+	subtitle.text = "증강 선택"
+	subtitle.position = Vector2(0, 64)
+	subtitle.size = Vector2(1000, 28)
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_font_size_override("font_size", 20)
+	subtitle.add_theme_color_override("font_color", Color(0.78, 0.74, 0.7))
+	content.add_child(subtitle)
+
+	var cards := HBoxContainer.new()
+	cards.position = Vector2(26, 108)
+	cards.size = Vector2(948, 438)
+	cards.add_theme_constant_override("separation", 28)
+	content.add_child(cards)
 
 	level_up_option_buttons.clear()
 	for index in range(3):
-		var button := Button.new()
-		button.custom_minimum_size = Vector2(470, 66)
+		var button := GothicWidgets.GothicUpgradeCard.new()
+		button.custom_minimum_size = Vector2(296, 438)
 		button.pressed.connect(_choose_level_up_option.bind(index))
 		level_up_option_buttons.append(button)
-		content.add_child(button)
+		cards.add_child(button)
 
 
 func _build_game_over_panel(parent: Control) -> void:
@@ -880,12 +1289,15 @@ func _shake_ultimate_camera() -> void:
 
 
 func _update_ultimate_ui() -> void:
-	if ultimate_bar == null:
-		return
+	var progress := 1.0 if ultimate_ready else float(ultimate_kills) / maxf(1.0, float(ultimate_required_kills))
+	if ultimate_portrait_ring != null and ultimate_portrait_ring.has_method("set_charge"):
+		ultimate_portrait_ring.set_charge(progress, ultimate_ready)
 
-	ultimate_bar.max_value = ultimate_required_kills
-	ultimate_bar.value = ultimate_required_kills if ultimate_ready else ultimate_kills
-	ultimate_label.text = "궁극기 준비: Q" if ultimate_ready else "궁극기: %d/%d" % [ultimate_kills, ultimate_required_kills]
+	if ultimate_bar != null:
+		ultimate_bar.max_value = ultimate_required_kills
+		ultimate_bar.value = ultimate_required_kills if ultimate_ready else ultimate_kills
+	if ultimate_label != null:
+		ultimate_label.text = "ULT READY  Q" if ultimate_ready else "ULT %d/%d" % [ultimate_kills, ultimate_required_kills]
 
 
 func _set_experiment_mode(enabled: bool) -> void:
@@ -906,6 +1318,11 @@ func _set_experiment_mode(enabled: bool) -> void:
 		experiment_mode_button.set_pressed_no_signal(experiment_mode)
 		experiment_mode_button.text = "DEV TEST: ON" if experiment_mode else "DEV TEST: OFF"
 		experiment_mode_button.modulate = Color(0.55, 1.0, 0.72) if experiment_mode else Color.WHITE
+
+	if dev_upgrade_panel != null:
+		dev_upgrade_panel.visible = experiment_mode
+		if experiment_mode:
+			_refresh_dev_upgrade_options()
 
 
 func _clear_experiment_threats() -> void:
@@ -930,6 +1347,7 @@ func _ensure_input_actions() -> void:
 	_set_key_action("ultimate", [KEY_Q])
 	_set_key_action("blink", [KEY_SPACE])
 	_set_key_action("barrier", [KEY_F])
+	_set_key_action("sword_wave", [KEY_E])
 	_set_key_action("dev_experiment_mode", [KEY_F10])
 
 

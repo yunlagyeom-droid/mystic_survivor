@@ -19,6 +19,12 @@ texture = ExtResource("player_texture")
 hframes = 8
 vframes = 8
 
+[node name="WeaponSprite2D" type="Sprite2D" parent="."]
+visible = false
+position = Vector2(0, -8)
+scale = Vector2(0.42, 0.42)
+z_index = 1
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, 8)
 shape = SubResource("player_shape")

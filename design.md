@@ -1,7 +1,7 @@
-# design.md
+﻿# design.md
 
 ## Game Summary
-This project is a 2.5D quarter-view action game that combines horde-survival combat with RPG-style boss encounters.
+This project is a action game that combines horde-survival combat with RPG-style boss encounters.
 
 The core appeal of the game is:
 - clearing large groups of enemies quickly and satisfyingly
@@ -108,6 +108,185 @@ The mage and hunter should not feel like the same character with different visua
 The mage should feel like a character who controls space.
 The hunter should feel like a character who breaks through timing windows.
 
+## Hunter Sprite Production Goal
+For the hunter combat sprite work, prioritize a 2D slightly tilted top-down game-sprite read over the broader 2.5D design language in this document.
+
+The final deliverables must be immediately testable in Godot:
+- transparent PNG files
+- unified frame size across all directions and actions
+- consistent direction/action filename rules
+- shared pivot/anchor rules
+- readable in-game silhouettes rather than illustration-sheet polish
+
+The sprite camera is locked to a slightly tilted top-down view. It is not a vertical top-down view, front-facing concept art, portrait art, or poster-style character sheet.
+
+The character identity must stay consistent across every frame:
+- short black bob hair
+- red hair-tip accents and a small white hair section
+- cold, sharp expression
+- black outfit with red lining or red accents
+- white shirt detail
+- skirt, thigh garter belts, gloves, and high-heel boot silhouette
+- long, sleek black sword with red glowing accents
+
+The production goal is not to redraw a new character for every frame. The goal is to make one consistent character appear to move naturally in-game.
+
+### Hunter Sprite Export Rules
+Use a single frame size for the entire hunter combat set.
+
+Recommended working frame:
+- 192x192 px per frame for source cleanup and Godot testing
+
+Allowed final downscale:
+- 128x128 px only after the full set is visually stable
+
+Every exported frame must:
+- use transparent PNG
+- keep the character fully inside the frame with attack-safe padding
+- preserve the same body scale across all frames
+- keep the sword length stable
+- keep hands and sword grip/contact readable
+- avoid background, shadows, motion blur, excessive effects, and decorative framing
+
+### Pivot And Anchor Rules
+Use one common pivot rule for all hunter frames.
+
+Primary pivot:
+- bottom-center foot anchor
+- Godot Sprite2D.offset or import positioning should align the character's ground contact point consistently
+
+Recommended pivot position in a 192x192 frame:
+- x = 96
+- y = 150 to 160, depending on final foot placement
+
+The pivot should represent the character's gameplay position, not the visual center of the sword or coat.
+
+Keep this pivot stable across:
+- idle
+- walk
+- slash
+- dash preparation
+- dash recovery
+- hit
+- parry
+
+Large sword swings may extend inside the frame, but they must not move the gameplay pivot.
+
+### Direction Naming Rules
+Use these exact direction keys:
+- down
+- down_right
+- right
+- up_right
+- up
+- up_left
+- left
+- down_left
+
+Do not mix abbreviations such as dr, ne, south, or front in final filenames.
+
+### Action Naming Rules
+Use these exact action keys:
+- idle
+- walk
+- slash
+- dash_ready
+- dash_recover
+- hit
+- parry
+
+### File Naming Rules
+Individual frame filenames:
+
+```text
+hunter_<action>_<direction>_<frame>.png
+```
+
+Examples:
+
+```text
+hunter_idle_down_000.png
+hunter_walk_down_003.png
+hunter_slash_down_right_004.png
+hunter_dash_ready_right_001.png
+hunter_dash_recover_up_002.png
+hunter_hit_left_000.png
+hunter_parry_up_left_001.png
+```
+
+Optional sprite sheet filenames:
+
+```text
+hunter_<action>_<direction>_sheet.png
+```
+
+Examples:
+
+```text
+hunter_idle_down_sheet.png
+hunter_walk_down_right_sheet.png
+hunter_slash_right_sheet.png
+```
+
+### Recommended Frame Counts
+Start with key poses before filling in-between frames.
+
+Recommended final counts:
+- idle: 4 frames per direction
+- walk: 6 or 8 frames per direction
+- slash: 5 to 7 frames per direction
+- dash_ready: 3 to 4 frames per direction
+- dash_recover: 3 to 4 frames per direction
+- hit: 2 to 3 frames per direction
+- parry: 3 to 4 frames per direction
+
+Do not generate a complete 8-direction animation set in one image-generation pass. First lock the base pose and key poses, then create the in-between frames.
+
+### Godot Test Setup
+For quick testing in Godot, each action/direction should be importable into AnimatedSprite2D or an equivalent SpriteFrames resource.
+
+Suggested animation names:
+
+```text
+idle_down
+idle_down_right
+idle_right
+idle_up_right
+idle_up
+idle_up_left
+idle_left
+idle_down_left
+walk_down
+walk_down_right
+slash_down
+dash_ready_down
+dash_recover_down
+hit_down
+parry_down
+```
+
+Use the same naming pattern for all actions and directions:
+
+```text
+<action>_<direction>
+```
+
+Suggested playback speeds:
+- idle: 4 to 6 fps
+- walk: 8 to 12 fps
+- slash: 12 to 16 fps
+- dash_ready: 10 to 14 fps
+- dash_recover: 10 to 14 fps
+- hit: 10 to 12 fps
+- parry: 10 to 14 fps
+
+During testing, verify:
+- frame-to-frame scale stability
+- pivot stability
+- readable direction changes
+- natural hand-to-sword contact
+- no frame popping in coat, hair, shoes, or sword length
+- no unwanted background pixels after transparency cleanup
 ## Theme Structure
 The game contains multiple world themes, such as:
 - fantasy regions with mystical forests, grasslands, ruins, and dungeons
@@ -268,3 +447,4 @@ As the project grows, it should continue to reinforce these pillars:
 - quarter-view readability
 
 Whenever a new feature is added, it should support at least one of these pillars and should not weaken the others.
+

@@ -8,10 +8,17 @@ const CITY_CENTERLINE_ROW := -1
 const CITY_CROSSWALK_COLUMN := -1
 const GothicWidgets := preload("res://scripts/ui/in_game_gothic_widgets.gd")
 const HUNTER_HUD_PORTRAIT_PATH := "res://assets/ui/hud/hunter_hud_portrait_face_v1.png"
+const DarkRuinsStageBuilder := preload("res://scripts/stages/dark_ruins_stage.gd")
 
-@export var slime_scene: PackedScene
+@export var bone_runner_scene: PackedScene
+@export var grave_brute_scene: PackedScene
+@export var hex_caster_scene: PackedScene
+@export var ruin_warden_scene: PackedScene
+@export var twin_wizard_primary_scene: PackedScene
+@export var twin_wizard_support_scene: PackedScene
 @export var experience_gem_scene: PackedScene
 @export var obstacle_scenes: Array[PackedScene] = []
+@export var use_dark_ruins_stage := true
 @export var background_texture: Texture2D
 @export var city_tile_set: TileSet
 @export var use_city_tilemap := true
@@ -25,6 +32,11 @@ const HUNTER_HUD_PORTRAIT_PATH := "res://assets/ui/hud/hunter_hud_portrait_face_
 @export var spawn_interval := 0.3
 @export var max_enemies := 400
 @export var world_radius := 2600.0
+@export var world_bounds := Vector2.ZERO
+@export var world_edge_margin := 80.0
+@export var pressure_phase_time := 70.0
+@export var boss_phase_time := 150.0
+@export var stage_duration := 60.0
 @export var background_scale := 0.82
 @export var ultimate_required_kills := 10
 @export var debug_ultimate_always_ready := true
@@ -46,6 +58,17 @@ var ultimate_showing := false
 var suppress_ultimate_charge := false
 var experiment_mode := false
 var game_over := false
+var stage_cleared := false
+var wave_time := 0.0
+var stage_phase := 0
+var stage_index := 1
+var stage_time := 0.0
+var stage_state := "wave"
+var boss_spawned := false
+var active_bosses := 0
+var current_enemy_pool: Array[PackedScene] = []
+var background_world_rect := Rect2()
+var playable_world_rect := Rect2()
 
 var canvas_layer: CanvasLayer
 var health_bar
@@ -74,6 +97,7 @@ var level_up_option_buttons: Array[Button] = []
 var current_level_up_options: Array[Dictionary] = []
 var pending_level_up_levels: Array[int] = []
 var game_over_panel: PanelContainer
+var game_over_title_label: Label
 var final_stats_label: Label
 var ultimate_overlay: Control
 var ultimate_texture_rect: TextureRect
@@ -98,6 +122,7 @@ func _ready() -> void:
 	_build_background()
 	_build_obstacles()
 	_build_ui()
+	_update_stage_phase()
 
 	player.projectile_requested.connect(_spawn_projectile)
 	player.health_changed.connect(_on_player_health_changed)
@@ -106,6 +131,8 @@ func _ready() -> void:
 	player.level_up_ready.connect(_queue_level_up)
 	player.world_vfx_requested.connect(_add_player_world_vfx)
 	player.died.connect(_on_player_died)
+	player.world_radius = world_radius
+	player.world_bounds = _get_world_bounds()
 
 	spawn_timer.wait_time = spawn_interval
 	spawn_timer.timeout.connect(_spawn_enemy)
@@ -122,6 +149,9 @@ func _process(delta: float) -> void:
 
 	if not experiment_mode:
 		elapsed_time += delta
+		wave_time += delta
+		stage_time += delta
+		_update_stage_phase()
 	time_label.text = _format_time(elapsed_time)
 	defeated_label.text = "처치: %d" % defeated_count
 	_update_hunter_skill_slots()
@@ -139,23 +169,177 @@ func _unhandled_input(event: InputEvent) -> void:
 func _spawn_enemy() -> void:
 	if game_over or get_tree().paused or experiment_mode:
 		return
+	if stage_state != "wave" or boss_spawned:
+		return
 	if enemy_container.get_child_count() >= max_enemies:
 		return
 
-	var enemy := slime_scene.instantiate()
+	var enemy_scene := _pick_enemy_scene()
+	if enemy_scene == null:
+		return
+
+	var enemy := enemy_scene.instantiate()
 	var angle := randf_range(0.0, TAU)
 	var spawn_position := player.global_position + Vector2.RIGHT.rotated(angle) * spawn_distance
-	spawn_position.x = clampf(spawn_position.x, -world_radius, world_radius)
-	spawn_position.y = clampf(spawn_position.y, -world_radius, world_radius)
+	spawn_position = _clamp_to_world_bounds(spawn_position)
+
+	_add_enemy(enemy, spawn_position)
+
+
+func _pick_enemy_scene() -> PackedScene:
+	if current_enemy_pool.is_empty():
+		_update_stage_phase()
+	if current_enemy_pool.is_empty():
+		return null
+
+	var roll := randf()
+	if stage_index <= 1:
+		return bone_runner_scene
+	if stage_index == 2:
+		if roll < 0.72:
+			return bone_runner_scene
+		return grave_brute_scene
+	if stage_index == 3:
+		if roll < 0.55:
+			return bone_runner_scene
+		if roll < 0.78:
+			return grave_brute_scene
+		return hex_caster_scene
+
+	if roll < 0.46:
+		return bone_runner_scene
+	if roll < 0.72:
+		return grave_brute_scene
+	return hex_caster_scene
+
+
+func _add_enemy(enemy: Node, spawn_position: Vector2) -> void:
+	if enemy == null:
+		return
 
 	enemy_container.add_child(enemy)
-	enemy.global_position = spawn_position
+	var enemy_node := enemy as Node2D
+	if enemy_node != null:
+		enemy_node.global_position = spawn_position
 	if enemy.has_method("setup_player"):
 		enemy.setup_player(player)
-	elif enemy is Slime:
-		(enemy as Slime).player = player
 	if enemy.has_signal("defeated"):
 		enemy.connect("defeated", _on_enemy_defeated)
+
+
+func _update_stage_phase() -> void:
+	if not use_dark_ruins_stage:
+		current_enemy_pool = []
+		return
+
+	if stage_state != "wave":
+		return
+
+	if stage_index <= 3 and stage_time >= stage_duration:
+		_advance_stage()
+		return
+
+	match stage_index:
+		1:
+			stage_phase = 0
+			current_enemy_pool = [bone_runner_scene]
+			_set_spawn_interval(0.24)
+		2:
+			stage_phase = 1
+			current_enemy_pool = [bone_runner_scene, grave_brute_scene]
+			_set_spawn_interval(0.22)
+		3:
+			stage_phase = 2
+			current_enemy_pool = [bone_runner_scene, grave_brute_scene, hex_caster_scene]
+			_set_spawn_interval(0.2)
+		_:
+			stage_phase = 2
+			current_enemy_pool = [bone_runner_scene, grave_brute_scene, hex_caster_scene]
+
+
+func _advance_stage() -> void:
+	stage_index += 1
+	stage_time = 0.0
+	wave_time = 0.0
+	if stage_index <= 3:
+		_update_stage_phase()
+		return
+	if stage_index == 4:
+		_spawn_stage_4_miniboss()
+		return
+	if stage_index == 5:
+		_spawn_twin_bosses()
+
+
+func _spawn_boss() -> void:
+	_spawn_stage_4_miniboss()
+
+
+func _spawn_stage_4_miniboss() -> void:
+	if ruin_warden_scene == null or player == null:
+		return
+	stage_state = "boss"
+	boss_spawned = true
+	active_bosses = 1
+	if spawn_timer != null:
+		spawn_timer.stop()
+	_clear_current_enemies()
+
+	var boss := ruin_warden_scene.instantiate()
+	var spawn_position := player.global_position + Vector2(0.0, -520.0)
+	spawn_position = _clamp_to_world_bounds(spawn_position)
+	_add_enemy(boss, spawn_position)
+
+
+func _spawn_twin_bosses() -> void:
+	if twin_wizard_primary_scene == null or twin_wizard_support_scene == null or player == null:
+		return
+	stage_state = "boss"
+	boss_spawned = true
+	active_bosses = 2
+	if spawn_timer != null:
+		spawn_timer.stop()
+	_clear_current_enemies()
+
+	var left_position := _clamp_to_world_bounds(player.global_position + Vector2(-360.0, -360.0))
+	var right_position := _clamp_to_world_bounds(player.global_position + Vector2(360.0, -360.0))
+	_add_enemy(twin_wizard_primary_scene.instantiate(), left_position)
+	_add_enemy(twin_wizard_support_scene.instantiate(), right_position)
+
+
+func _clear_current_enemies() -> void:
+	for child in enemy_container.get_children():
+		child.queue_free()
+
+
+func _set_spawn_interval(next_interval: float) -> void:
+	if spawn_timer == null:
+		return
+	if absf(spawn_timer.wait_time - next_interval) < 0.001:
+		return
+	spawn_timer.wait_time = next_interval
+
+
+func _get_world_bounds() -> Vector2:
+	if playable_world_rect.size.x > 0.0 and playable_world_rect.size.y > 0.0:
+		return playable_world_rect.size * 0.5
+	if world_bounds.x > 0.0 and world_bounds.y > 0.0:
+		return world_bounds
+	return Vector2.ONE * world_radius
+
+
+func _clamp_to_world_bounds(world_position: Vector2) -> Vector2:
+	if playable_world_rect.size.x > 0.0 and playable_world_rect.size.y > 0.0:
+		return Vector2(
+			clampf(world_position.x, playable_world_rect.position.x, playable_world_rect.end.x),
+			clampf(world_position.y, playable_world_rect.position.y, playable_world_rect.end.y)
+		)
+
+	var bounds := _get_world_bounds()
+	return Vector2(
+		clampf(world_position.x, -bounds.x, bounds.x),
+		clampf(world_position.y, -bounds.y, bounds.y)
+	)
 
 
 func _spawn_projectile(projectile_scene: PackedScene, origin: Vector2, direction: Vector2, damage: int, params: Dictionary) -> void:
@@ -173,6 +357,7 @@ func _on_enemy_defeated(defeat_info: Dictionary) -> void:
 	var charges_ultimate := bool(defeat_info.get("charges_ultimate", true)) and not suppress_ultimate_charge
 	var spawn_position: Vector2 = defeat_info.get("position", Vector2.ZERO)
 	var experience_value := int(defeat_info.get("experience_value", 0))
+	var is_boss := bool(defeat_info.get("is_boss", false))
 
 	if counts_as_defeat:
 		defeated_count += 1
@@ -190,6 +375,38 @@ func _on_enemy_defeated(defeat_info: Dictionary) -> void:
 
 	if experience_value > 0:
 		call_deferred("_spawn_experience_gem", spawn_position, experience_value)
+	if is_boss:
+		call_deferred("_on_boss_defeated", defeat_info)
+
+
+func _on_boss_defeated(defeat_info: Dictionary) -> void:
+	if game_over:
+		return
+
+	active_bosses = maxi(0, active_bosses - 1)
+	if stage_index == 4:
+		stage_index = 5
+		stage_time = 0.0
+		wave_time = 0.0
+		boss_spawned = false
+		active_bosses = 0
+		call_deferred("_spawn_twin_bosses")
+		return
+
+	if stage_index == 5:
+		if active_bosses > 0:
+			_empower_remaining_twin_bosses()
+			return
+		call_deferred("_on_stage_cleared")
+		return
+
+	call_deferred("_on_stage_cleared")
+
+
+func _empower_remaining_twin_bosses() -> void:
+	for boss in get_tree().get_nodes_in_group("twin_bosses"):
+		if is_instance_valid(boss) and boss.has_method("empower_from_twin_death"):
+			boss.empower_from_twin_death()
 
 
 func _spawn_experience_gem(spawn_position: Vector2, experience_value: int) -> void:
@@ -202,6 +419,8 @@ func _spawn_experience_gem(spawn_position: Vector2, experience_value: int) -> vo
 
 
 func _build_obstacles() -> void:
+	if use_dark_ruins_stage:
+		return
 	if obstacle_container == null or obstacle_scenes.is_empty():
 		return
 
@@ -503,9 +722,28 @@ func _update_hunter_skill_slots() -> void:
 
 func _on_player_died() -> void:
 	game_over = true
+	stage_cleared = false
 	spawn_timer.stop()
+	if game_over_title_label != null:
+		game_over_title_label.text = "게임 오버"
 	final_stats_label.text = "시간 %s   처치 %d" % [_format_time(elapsed_time), defeated_count]
 	game_over_panel.visible = true
+	get_tree().paused = true
+
+
+func _on_stage_cleared() -> void:
+	if game_over:
+		return
+	game_over = true
+	stage_cleared = true
+	if spawn_timer != null:
+		spawn_timer.stop()
+	if game_over_title_label != null:
+		game_over_title_label.text = "STAGE CLEAR"
+	if final_stats_label != null:
+		final_stats_label.text = "시간 %s   처치 %d" % [_format_time(elapsed_time), defeated_count]
+	if game_over_panel != null:
+		game_over_panel.visible = true
 	get_tree().paused = true
 
 
@@ -540,6 +778,13 @@ func _apply_selected_character_ultimate_cutin() -> void:
 
 
 func _build_background() -> void:
+	if use_dark_ruins_stage:
+		var dark_stage := DarkRuinsStageBuilder.new()
+		var stage_rect := dark_stage.build(background, obstacle_container, world_bounds)
+		if stage_rect.size.x > 0.0 and stage_rect.size.y > 0.0:
+			_set_world_rects_from_background(stage_rect)
+		return
+
 	if use_city_tilemap and city_tile_set != null and city_tile_map != null:
 		_build_city_tilemap_background()
 		return
@@ -565,6 +810,34 @@ func _build_background() -> void:
 			tile.scale = Vector2.ONE * background_scale
 			tile.position = Vector2(x * tile_size.x, y * tile_size.y)
 			background.add_child(tile)
+
+
+func _set_world_rects_from_background(stage_rect: Rect2) -> void:
+	background_world_rect = stage_rect
+	var margin := maxf(0.0, world_edge_margin)
+	var playable_size := background_world_rect.size - Vector2.ONE * margin * 2.0
+	if playable_size.x <= 0.0 or playable_size.y <= 0.0:
+		playable_world_rect = background_world_rect
+	else:
+		playable_world_rect = Rect2(background_world_rect.position + Vector2.ONE * margin, playable_size)
+
+	world_bounds = playable_world_rect.size * 0.5
+	world_radius = maxf(world_bounds.x, world_bounds.y)
+	if player != null:
+		player.world_bounds = world_bounds
+		player.world_radius = world_radius
+		player.global_position = _clamp_to_world_bounds(player.global_position)
+	_apply_camera_limits(background_world_rect)
+
+
+func _apply_camera_limits(stage_rect: Rect2) -> void:
+	if camera == null:
+		return
+
+	camera.limit_left = int(floor(stage_rect.position.x))
+	camera.limit_top = int(floor(stage_rect.position.y))
+	camera.limit_right = int(ceil(stage_rect.end.x))
+	camera.limit_bottom = int(ceil(stage_rect.end.y))
 
 
 func _build_city_tilemap_background() -> void:
@@ -949,12 +1222,12 @@ func _build_dev_upgrade_panel(parent: Control) -> void:
 	dev_upgrade_panel = PanelContainer.new()
 	dev_upgrade_panel.process_mode = Node.PROCESS_MODE_ALWAYS
 	dev_upgrade_panel.visible = false
-	dev_upgrade_panel.custom_minimum_size = Vector2(650, 86)
+	dev_upgrade_panel.custom_minimum_size = Vector2(650, 124)
 	dev_upgrade_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	dev_upgrade_panel.offset_left = 16
 	dev_upgrade_panel.offset_top = 170
 	dev_upgrade_panel.offset_right = 666
-	dev_upgrade_panel.offset_bottom = 256
+	dev_upgrade_panel.offset_bottom = 294
 	parent.add_child(dev_upgrade_panel)
 
 	var content := VBoxContainer.new()
@@ -1014,6 +1287,26 @@ func _build_dev_upgrade_panel(parent: Control) -> void:
 	dev_upgrade_status_label.text = "Apply upgrades instantly in DEV TEST."
 	dev_upgrade_status_label.custom_minimum_size = Vector2(520, 24)
 	content.add_child(dev_upgrade_status_label)
+	_build_dev_stage_jump_row(content)
+
+
+func _build_dev_stage_jump_row(parent: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	parent.add_child(row)
+
+	var title := Label.new()
+	title.text = "Jump Stage"
+	title.custom_minimum_size = Vector2(96, 28)
+	row.add_child(title)
+
+	for stage in range(1, 6):
+		var button := Button.new()
+		button.text = "S%d" % stage
+		button.custom_minimum_size = Vector2(58, 28)
+		button.focus_mode = Control.FOCUS_NONE
+		button.pressed.connect(_jump_to_stage.bind(stage))
+		row.add_child(button)
 
 
 func _refresh_dev_upgrade_options_from_button() -> void:
@@ -1091,6 +1384,45 @@ func _reset_dev_upgrades() -> void:
 	_refresh_dev_upgrade_options()
 	if dev_upgrade_status_label != null:
 		dev_upgrade_status_label.text = "Reset upgrades."
+
+
+func _jump_to_stage(target_stage: int) -> void:
+	_release_dev_upgrade_focus()
+	target_stage = clampi(target_stage, 1, 5)
+	get_tree().paused = false
+	game_over = false
+	stage_cleared = false
+	if game_over_panel != null:
+		game_over_panel.visible = false
+	if level_up_panel != null:
+		level_up_panel.visible = false
+
+	_clear_experiment_threats()
+	for child in gem_container.get_children():
+		child.queue_free()
+
+	stage_index = target_stage
+	stage_time = 0.0
+	wave_time = 0.0
+	boss_spawned = false
+	active_bosses = 0
+	stage_state = "wave"
+	current_enemy_pool.clear()
+
+	if target_stage <= 3 and experiment_mode:
+		_set_experiment_mode(false)
+
+	if target_stage <= 3:
+		_update_stage_phase()
+		if spawn_timer != null:
+			spawn_timer.start()
+	elif target_stage == 4:
+		_spawn_stage_4_miniboss()
+	else:
+		_spawn_twin_bosses()
+
+	if dev_upgrade_status_label != null:
+		dev_upgrade_status_label.text = "Jumped to Stage %d." % target_stage
 
 
 func _on_dev_upgrade_count_text_changed(_new_text: String) -> void:
@@ -1201,10 +1533,10 @@ func _build_game_over_panel(parent: Control) -> void:
 	content.add_theme_constant_override("separation", 14)
 	game_over_panel.add_child(content)
 
-	var title := Label.new()
-	title.text = "게임 오버"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content.add_child(title)
+	game_over_title_label = Label.new()
+	game_over_title_label.text = "게임 오버"
+	game_over_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	content.add_child(game_over_title_label)
 
 	final_stats_label = Label.new()
 	final_stats_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1308,7 +1640,7 @@ func _set_experiment_mode(enabled: bool) -> void:
 	if spawn_timer != null:
 		if experiment_mode:
 			spawn_timer.stop()
-		elif not game_over:
+		elif not game_over and not boss_spawned:
 			spawn_timer.start()
 
 	if experiment_mode:

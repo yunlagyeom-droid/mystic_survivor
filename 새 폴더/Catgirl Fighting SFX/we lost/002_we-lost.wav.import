@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://g7s37bospme0"
+path="res://.godot/imported/002_we-lost.wav-4145acad0f06d23260d0af66a95467ba.sample"
+
+[deps]
+
+source_file="res://새 폴더/Catgirl Fighting SFX/we lost/002_we-lost.wav"
+dest_files=["res://.godot/imported/002_we-lost.wav-4145acad0f06d23260d0af66a95467ba.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

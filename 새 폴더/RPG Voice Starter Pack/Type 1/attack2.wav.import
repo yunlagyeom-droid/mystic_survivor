@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://cch3ps450n6sb"
+path="res://.godot/imported/attack2.wav-6d075083c1a60a32cae8f76d8b8c2a37.sample"
+
+[deps]
+
+source_file="res://새 폴더/RPG Voice Starter Pack/Type 1/attack2.wav"
+dest_files=["res://.godot/imported/attack2.wav-6d075083c1a60a32cae8f76d8b8c2a37.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

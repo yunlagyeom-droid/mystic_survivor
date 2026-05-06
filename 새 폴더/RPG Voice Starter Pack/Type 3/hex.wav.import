@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://di6kl87o3m7cu"
+path="res://.godot/imported/hex.wav-48e8c34c79e2cffed5aadcc46513821e.sample"
+
+[deps]
+
+source_file="res://새 폴더/RPG Voice Starter Pack/Type 3/hex.wav"
+dest_files=["res://.godot/imported/hex.wav-48e8c34c79e2cffed5aadcc46513821e.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

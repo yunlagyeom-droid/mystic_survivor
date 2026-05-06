@@ -1,0 +1,51 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/twin_wizard_boss.gd" id="boss_script"]
+[ext_resource type="Texture2D" path="res://assets/_asset_store/EVil Wizard 2/Sprites/Idle.png" id="idle_texture"]
+[ext_resource type="Texture2D" path="res://assets/_asset_store/EVil Wizard 2/Sprites/Run.png" id="move_texture"]
+[ext_resource type="Texture2D" path="res://assets/_asset_store/EVil Wizard 2/Sprites/Attack1.png" id="attack_1_texture"]
+[ext_resource type="Texture2D" path="res://assets/_asset_store/EVil Wizard 2/Sprites/Attack2.png" id="attack_2_texture"]
+[ext_resource type="Texture2D" path="res://assets/_asset_store/EVil Wizard 2/Sprites/Take hit.png" id="take_hit_texture"]
+[ext_resource type="Texture2D" path="res://assets/_asset_store/EVil Wizard 2/Sprites/Death.png" id="death_texture"]
+
+[sub_resource type="CircleShape2D" id="body_shape"]
+radius = 58.0
+
+[sub_resource type="CircleShape2D" id="attack_shape"]
+radius = 88.0
+
+[node name="TwinWizardArchmage" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 17
+script = ExtResource("boss_script")
+boss_id = "twin_archmage"
+is_primary = true
+move_speed = 84.0
+max_health = 1250
+touch_damage = 12
+experience_value = 90
+preferred_range = 470.0
+pattern_cooldown = 1.6
+idle_texture = ExtResource("idle_texture")
+move_texture = ExtResource("move_texture")
+attack_1_texture = ExtResource("attack_1_texture")
+attack_2_texture = ExtResource("attack_2_texture")
+take_hit_texture = ExtResource("take_hit_texture")
+death_texture = ExtResource("death_texture")
+animation_fps = 8.0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -66)
+scale = Vector2(2.65, 2.65)
+texture = ExtResource("idle_texture")
+hframes = 8
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("body_shape")
+
+[node name="AttackArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackArea"]
+shape = SubResource("attack_shape")

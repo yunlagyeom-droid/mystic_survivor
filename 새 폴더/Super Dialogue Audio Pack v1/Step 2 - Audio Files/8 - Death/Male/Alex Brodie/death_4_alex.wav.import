@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://csyicfr18jjk7"
+path="res://.godot/imported/death_4_alex.wav-fdfb89f285001e87ec773b61dd47ec42.sample"
+
+[deps]
+
+source_file="res://새 폴더/Super Dialogue Audio Pack v1/Step 2 - Audio Files/8 - Death/Male/Alex Brodie/death_4_alex.wav"
+dest_files=["res://.godot/imported/death_4_alex.wav-fdfb89f285001e87ec773b61dd47ec42.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

@@ -54,6 +54,7 @@ const COMMON_UPGRADE_DEFINITIONS := {
 @export var level_required_base := 6
 @export var level_required_growth := 4
 @export var world_radius := 2600.0
+@export var world_bounds := Vector2.ZERO
 @export var sprite_columns := 8
 @export var sprite_rows := 8
 @export var walk_animation_fps := 10.0
@@ -155,8 +156,9 @@ func _physics_process(delta: float) -> void:
 	velocity = movement_direction * get_move_speed()
 	move_and_slide()
 
-	global_position.x = clampf(global_position.x, -world_radius, world_radius)
-	global_position.y = clampf(global_position.y, -world_radius, world_radius)
+	var bounds := get_world_bounds()
+	global_position.x = clampf(global_position.x, -bounds.x, bounds.x)
+	global_position.y = clampf(global_position.y, -bounds.y, bounds.y)
 
 	var moved_distance := previous_position.distance_to(global_position)
 	update_walk_animation(movement_direction, moved_distance, delta)
@@ -171,6 +173,12 @@ func set_experiment_mode(enabled: bool) -> void:
 	experiment_mode = enabled
 	if combat != null and combat.has_method("set_experiment_mode"):
 		combat.set_experiment_mode(experiment_mode)
+
+
+func get_world_bounds() -> Vector2:
+	if world_bounds.x > 0.0 and world_bounds.y > 0.0:
+		return world_bounds
+	return Vector2.ONE * world_radius
 
 
 func take_damage(amount: int) -> void:

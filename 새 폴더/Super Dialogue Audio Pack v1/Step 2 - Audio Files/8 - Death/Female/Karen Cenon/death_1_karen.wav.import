@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://d21rmdnhnbup4"
+path="res://.godot/imported/death_1_karen.wav-718a8948b6e7c5186b63df517dabaa1c.sample"
+
+[deps]
+
+source_file="res://새 폴더/Super Dialogue Audio Pack v1/Step 2 - Audio Files/8 - Death/Female/Karen Cenon/death_1_karen.wav"
+dest_files=["res://.godot/imported/death_1_karen.wav-718a8948b6e7c5186b63df517dabaa1c.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

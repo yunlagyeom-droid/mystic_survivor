@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://bg0bld6gp0b88"
+path="res://.godot/imported/flirty_endearing_07.wav-ebe9d0d9cd4e841ab6e9accf95c18beb.sample"
+
+[deps]
+
+source_file="res://새 폴더/free/flirty_endearing_07.wav"
+dest_files=["res://.godot/imported/flirty_endearing_07.wav-ebe9d0d9cd4e841ab6e9accf95c18beb.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

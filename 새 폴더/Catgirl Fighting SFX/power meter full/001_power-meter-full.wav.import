@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://dvk44qsudw3fk"
+path="res://.godot/imported/001_power-meter-full.wav-22fe9ebd646b58f3f13fe1ecd73e80aa.sample"
+
+[deps]
+
+source_file="res://새 폴더/Catgirl Fighting SFX/power meter full/001_power-meter-full.wav"
+dest_files=["res://.godot/imported/001_power-meter-full.wav-22fe9ebd646b58f3f13fe1ecd73e80aa.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

@@ -155,8 +155,9 @@ func try_skill_1(input_direction: Vector2) -> void:
 
 	var start_position: Vector2 = player.global_position
 	var target_position: Vector2 = player.global_position + dash_direction * dash_distance
-	target_position.x = clampf(target_position.x, -player.world_radius, player.world_radius)
-	target_position.y = clampf(target_position.y, -player.world_radius, player.world_radius)
+	var bounds: Vector2 = player.get_world_bounds() if player.has_method("get_world_bounds") else Vector2.ONE * player.world_radius
+	target_position.x = clampf(target_position.x, -bounds.x, bounds.x)
+	target_position.y = clampf(target_position.y, -bounds.y, bounds.y)
 
 	player.global_position = target_position
 	player.velocity = Vector2.ZERO

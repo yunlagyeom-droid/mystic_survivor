@@ -1,31 +1,38 @@
-[gd_scene format=3 uid="uid://oxl87ri0l51q"]
+[gd_scene load_steps=10 format=3 uid="uid://oxl87ri0l51q"]
 
-[ext_resource type="PackedScene" path="res://scenes/props/RoadBarricade.tscn" id="barricade_obstacle"]
-[ext_resource type="PackedScene" path="res://scenes/props/AbandonedCar.tscn" id="car_obstacle"]
-[ext_resource type="Texture2D" uid="uid://c5aj2poxxbu00" path="res://assets/maps/rainy_city_v2/source/rainy_city_generated_master.png" id="city_master"]
-[ext_resource type="TileSet" uid="uid://c6sdrbrdp2ajt" path="res://assets/maps/rainy_city_v2/tilesets/rainy_city_tileset.tres" id="city_tileset"]
 [ext_resource type="PackedScene" path="res://scenes/ExperienceGem.tscn" id="gem_scene"]
 [ext_resource type="Script" uid="uid://cwxbtshbpgudy" path="res://scripts/main.gd" id="main_script"]
 [ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="player_scene"]
-[ext_resource type="PackedScene" path="res://scenes/Slime.tscn" id="slime_scene"]
-[ext_resource type="Texture2D" uid="uid://cdpy4sccunyp2" path="res://assets/maps/grass_fantasy/backgrounds/stage_grass_fantasy.png" id="stage_texture"]
 [ext_resource type="Texture2D" uid="uid://bjr3oq3p8q16h" path="res://assets/players/mage/portraits/player_mage_ultimate_character.png" id="ultimate_cutin"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/BoneRunner.tscn" id="bone_runner_scene"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/GraveBrute.tscn" id="grave_brute_scene"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/HexCaster.tscn" id="hex_caster_scene"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/RuinWarden.tscn" id="ruin_warden_scene"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/TwinWizardArchmage.tscn" id="twin_wizard_primary_scene"]
+[ext_resource type="PackedScene" path="res://scenes/enemies/TwinWizardAcolyte.tscn" id="twin_wizard_support_scene"]
 
 [node name="Main" type="Node2D" unique_id=1271115251]
 script = ExtResource("main_script")
-slime_scene = ExtResource("slime_scene")
+bone_runner_scene = ExtResource("bone_runner_scene")
+grave_brute_scene = ExtResource("grave_brute_scene")
+hex_caster_scene = ExtResource("hex_caster_scene")
+ruin_warden_scene = ExtResource("ruin_warden_scene")
+twin_wizard_primary_scene = ExtResource("twin_wizard_primary_scene")
+twin_wizard_support_scene = ExtResource("twin_wizard_support_scene")
 experience_gem_scene = ExtResource("gem_scene")
-obstacle_scenes = Array[PackedScene]([ExtResource("car_obstacle"), ExtResource("barricade_obstacle")])
-background_texture = ExtResource("stage_texture")
-city_tile_set = ExtResource("city_tileset")
-city_master_texture = ExtResource("city_master")
+use_dark_ruins_stage = true
+use_city_tilemap = false
+spawn_interval = 0.24
+spawn_distance = 690.0
+max_enemies = 260
+world_radius = 1500.0
+world_bounds = Vector2(0, 0)
 ultimate_cutin_texture = ExtResource("ultimate_cutin")
 
 [node name="Background" type="Node2D" parent="." unique_id=1654884838]
 z_index = -100
 
 [node name="CityTileMap" type="TileMapLayer" parent="Background" unique_id=711537268]
-tile_set = ExtResource("city_tileset")
 
 [node name="GemContainer" type="Node2D" parent="." unique_id=1251540582]
 

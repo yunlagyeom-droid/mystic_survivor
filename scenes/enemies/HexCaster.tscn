@@ -1,0 +1,45 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/dark_enemy.gd" id="dark_enemy_script"]
+[ext_resource type="Texture2D" path="res://assets/_asset_store/Pixel Crawler - Free Pack/Entities/Mobs/Skeleton Crew/Skeleton - Mage/Run/Run-Sheet.png" id="caster_texture"]
+
+[sub_resource type="CircleShape2D" id="body_shape"]
+radius = 32.0
+
+[sub_resource type="CircleShape2D" id="attack_shape"]
+radius = 48.0
+
+[node name="HexCaster" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 17
+script = ExtResource("dark_enemy_script")
+enemy_name = "Hex Caster"
+behavior = 2
+move_speed = 95.0
+max_health = 54
+touch_damage = 6
+contact_cooldown = 0.9
+experience_value = 6
+animation_frames = 6
+animation_fps = 8.0
+preferred_range = 430.0
+cast_cooldown = 2.25
+cast_windup = 0.68
+cast_radius = 92.0
+cast_damage = 13
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -28)
+scale = Vector2(2.15, 2.15)
+texture = ExtResource("caster_texture")
+hframes = 6
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("body_shape")
+
+[node name="AttackArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackArea"]
+shape = SubResource("attack_shape")

@@ -1,0 +1,40 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/dark_enemy.gd" id="dark_enemy_script"]
+[ext_resource type="Texture2D" path="res://assets/_asset_store/Pixel Crawler - Free Pack/Entities/Mobs/Skeleton Crew/Skeleton - Warrior/Run/Run-Sheet.png" id="brute_texture"]
+
+[sub_resource type="CircleShape2D" id="body_shape"]
+radius = 40.0
+
+[sub_resource type="CircleShape2D" id="attack_shape"]
+radius = 62.0
+
+[node name="GraveBrute" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 17
+script = ExtResource("dark_enemy_script")
+enemy_name = "Grave Brute"
+behavior = 1
+move_speed = 82.0
+max_health = 150
+touch_damage = 18
+contact_cooldown = 0.9
+experience_value = 9
+animation_frames = 6
+animation_fps = 7.0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -34)
+scale = Vector2(2.65, 2.65)
+texture = ExtResource("brute_texture")
+hframes = 6
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("body_shape")
+
+[node name="AttackArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackArea"]
+shape = SubResource("attack_shape")

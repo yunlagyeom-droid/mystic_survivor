@@ -1,0 +1,38 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/ruin_warden.gd" id="warden_script"]
+[ext_resource type="Texture2D" path="res://assets/_asset_store/Pixel Crawler - Free Pack/Entities/Mobs/Orc Crew/Orc - Warrior/Run/Run-Sheet.png" id="warden_texture"]
+
+[sub_resource type="CircleShape2D" id="body_shape"]
+radius = 58.0
+
+[sub_resource type="CircleShape2D" id="attack_shape"]
+radius = 86.0
+
+[node name="RuinWarden" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 17
+script = ExtResource("warden_script")
+move_speed = 86.0
+max_health = 1450
+touch_damage = 14
+contact_cooldown = 0.8
+experience_value = 60
+animation_frames = 6
+animation_fps = 7.0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -50)
+scale = Vector2(3.45, 3.45)
+texture = ExtResource("warden_texture")
+hframes = 6
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("body_shape")
+
+[node name="AttackArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackArea"]
+shape = SubResource("attack_shape")

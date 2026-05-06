@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://dpohub1hopkh4"
+path="res://.godot/imported/water.wav-b4a80c4354d956731df1130134f36281.sample"
+
+[deps]
+
+source_file="res://새 폴더/RPG Voice Starter Pack/Type 2/water.wav"
+dest_files=["res://.godot/imported/water.wav-b4a80c4354d956731df1130134f36281.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

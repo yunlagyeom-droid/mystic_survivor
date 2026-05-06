@@ -1,0 +1,40 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/dark_enemy.gd" id="dark_enemy_script"]
+[ext_resource type="Texture2D" path="res://assets/_asset_store/Pixel Crawler - Free Pack/Entities/Mobs/Skeleton Crew/Skeleton - Rogue/Run/Run-Sheet.png" id="runner_texture"]
+
+[sub_resource type="CircleShape2D" id="body_shape"]
+radius = 30.0
+
+[sub_resource type="CircleShape2D" id="attack_shape"]
+radius = 46.0
+
+[node name="BoneRunner" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 17
+script = ExtResource("dark_enemy_script")
+enemy_name = "Bone Runner"
+behavior = 0
+move_speed = 175.0
+max_health = 30
+touch_damage = 7
+contact_cooldown = 0.55
+experience_value = 3
+animation_frames = 6
+animation_fps = 12.0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -24)
+scale = Vector2(2, 2)
+texture = ExtResource("runner_texture")
+hframes = 6
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("body_shape")
+
+[node name="AttackArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AttackArea"]
+shape = SubResource("attack_shape")

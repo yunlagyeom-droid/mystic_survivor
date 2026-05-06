@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://4premya7ystc"
+path="res://.godot/imported/confirmation_9_meghan.wav-3c19e91c14795f7e89830ceeb0bcc376.sample"
+
+[deps]
+
+source_file="res://새 폴더/Super Dialogue Audio Pack v1/Step 2 - Audio Files/2 - Confirmation/Female/Meghan Christian/confirmation_9_meghan.wav"
+dest_files=["res://.godot/imported/confirmation_9_meghan.wav-3c19e91c14795f7e89830ceeb0bcc376.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

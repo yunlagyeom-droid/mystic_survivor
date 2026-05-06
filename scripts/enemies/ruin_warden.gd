@@ -3,6 +3,8 @@ extends CharacterBody2D
 
 signal defeated(defeat_info: Dictionary)
 
+const CombatFeedback := preload("res://scripts/ui/world_combat_feedback.gd")
+
 @export var move_speed := 90.0
 @export var max_health := 1450
 @export var touch_damage := 14
@@ -28,6 +30,9 @@ var animation_time := 0.0
 var is_dead := false
 var enraged := false
 var telegraph_node: Node2D
+var health_bar := {}
+var hit_motion_timer := 0.0
+var base_sprite_scale := Vector2.ONE
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var attack_area: Area2D = $AttackArea
@@ -39,6 +44,9 @@ func _ready() -> void:
 	add_to_group("bosses")
 	if sprite != null:
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		base_sprite_scale = sprite.scale
+	health_bar = CombatFeedback.make_health_bar(self, 150.0, -132.0, Color(0.9, 0.12, 0.08, 0.96))
+	CombatFeedback.update_health_bar(health_bar, current_health, max_health, false)
 
 
 func setup_player(target: Node) -> void:
@@ -57,6 +65,11 @@ func _physics_process(delta: float) -> void:
 	contact_timer = maxf(0.0, contact_timer - delta)
 	if sprite != null:
 		sprite.modulate = sprite.modulate.lerp(Color.WHITE, minf(1.0, delta * 10.0))
+		hit_motion_timer = maxf(0.0, hit_motion_timer - delta)
+		if hit_motion_timer > 0.0:
+			sprite.scale = base_sprite_scale * Vector2(1.06, 0.94)
+		else:
+			sprite.scale = sprite.scale.lerp(base_sprite_scale, minf(1.0, delta * 16.0))
 		_update_animation(delta)
 
 	if not is_instance_valid(player):
@@ -82,6 +95,9 @@ func take_damage(amount: int, source := "attack") -> void:
 	current_health -= amount
 	if sprite != null:
 		sprite.modulate = Color(1.65, 1.42, 1.28)
+		hit_motion_timer = 0.12
+	CombatFeedback.update_health_bar(health_bar, current_health, max_health, false)
+	CombatFeedback.spawn_damage_number(self, amount, -154.0, Color(1.0, 0.66, 0.48, 1.0))
 
 	if current_health <= 0:
 		is_dead = true
@@ -129,7 +145,7 @@ func _start_next_pattern(distance: float) -> void:
 
 func _start_slam() -> void:
 	pattern_state = "slam"
-	pattern_windup = 0.72 if not enraged else 0.56
+	pattern_windup = (0.72 if not enraged else 0.56) * 0.5
 	velocity = Vector2.ZERO
 	telegraph_node = _make_wedge_telegraph(300.0, deg_to_rad(76.0), Color(1.0, 0.42, 0.24, 0.42))
 	add_child(telegraph_node)
@@ -137,7 +153,7 @@ func _start_slam() -> void:
 
 func _start_dash() -> void:
 	pattern_state = "dash"
-	pattern_windup = 0.64 if not enraged else 0.48
+	pattern_windup = (0.64 if not enraged else 0.48) * 0.5
 	pattern_target = global_position + pattern_direction * 620.0
 	var bounds := arena_bounds if arena_bounds.x > 0.0 and arena_bounds.y > 0.0 else Vector2.ONE * arena_radius
 	pattern_target.x = clampf(pattern_target.x, -bounds.x, bounds.x)
@@ -149,7 +165,7 @@ func _start_dash() -> void:
 
 func _start_shockwave() -> void:
 	pattern_state = "shockwave"
-	pattern_windup = 0.9 if not enraged else 0.68
+	pattern_windup = (0.9 if not enraged else 0.68) * 0.5
 	velocity = Vector2.ZERO
 	telegraph_node = _make_circle_telegraph(global_position, 290.0, Color(0.78, 0.54, 1.0, 0.76), 5.0)
 	get_tree().current_scene.add_child(telegraph_node)
@@ -277,3 +293,11 @@ func _make_defeat_info(source: String) -> Dictionary:
 		"is_boss": true,
 		"source": source,
 	}
+
+
+func get_health_ratio() -> float:
+	return clampf(float(current_health) / float(maxi(1, max_health)), 0.0, 1.0)
+
+
+func get_boss_display_name() -> String:
+	return "Ruin Warden"

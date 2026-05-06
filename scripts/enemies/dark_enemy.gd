@@ -3,6 +3,8 @@ extends CharacterBody2D
 
 signal defeated(defeat_info: Dictionary)
 
+const CombatFeedback := preload("res://scripts/ui/world_combat_feedback.gd")
+
 enum Behavior {
 	CHASER,
 	BRUTE,
@@ -33,6 +35,9 @@ var cast_windup_timer := 0.0
 var pending_cast_position := Vector2.ZERO
 var is_dead := false
 var telegraph: Line2D
+var health_bar := {}
+var hit_motion_timer := 0.0
+var base_sprite_scale := Vector2.ONE
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var attack_area: Area2D = $AttackArea
@@ -44,6 +49,9 @@ func _ready() -> void:
 	cast_timer = randf_range(0.3, cast_cooldown)
 	if sprite != null:
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		base_sprite_scale = sprite.scale
+	health_bar = CombatFeedback.make_health_bar(self, 58.0 if max_health < 100 else 72.0, -48.0, Color(0.82, 0.08, 0.1, 0.95))
+	CombatFeedback.update_health_bar(health_bar, current_health, max_health)
 
 
 func setup_player(target: Node) -> void:
@@ -55,6 +63,11 @@ func _physics_process(delta: float) -> void:
 	cast_timer = maxf(0.0, cast_timer - delta)
 	if sprite != null:
 		sprite.modulate = sprite.modulate.lerp(Color.WHITE, minf(1.0, delta * 12.0))
+		hit_motion_timer = maxf(0.0, hit_motion_timer - delta)
+		if hit_motion_timer > 0.0:
+			sprite.scale = base_sprite_scale * Vector2(1.08, 0.92)
+		else:
+			sprite.scale = sprite.scale.lerp(base_sprite_scale, minf(1.0, delta * 18.0))
 		_update_animation(delta)
 
 	if is_dead or not is_instance_valid(player):
@@ -74,6 +87,9 @@ func take_damage(amount: int, source := "attack") -> void:
 	current_health -= amount
 	if sprite != null:
 		sprite.modulate = Color(1.55, 1.45, 1.45)
+		hit_motion_timer = 0.1
+	CombatFeedback.update_health_bar(health_bar, current_health, max_health)
+	CombatFeedback.spawn_damage_number(self, amount, -62.0)
 
 	if current_health <= 0:
 		is_dead = true

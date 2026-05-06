@@ -11,6 +11,22 @@ const DASH_SPINNING_ARRIVAL_VFX_TEXTURE := preload("res://assets/players/hunter/
 const EXECUTION_SLASH_VFX_TEXTURE := preload("res://assets/players/hunter/skills/ultimate/hunter_execution_slash_vfx_sheet.png")
 const EXECUTION_DASH_VFX_TEXTURE := preload("res://assets/players/hunter/skills/ultimate/hunter_execution_dash_vfx_sheet.png")
 const EXECUTION_SLASH_MAIN_TEXTURE := preload("res://assets/players/hunter/skills/variants/v12_sword_wave_enhanced_large.png")
+const DASH_SFX_PATH := "res://assets/audio/hunter/hunter_dash_clean_plasma_blade.mp3"
+const BASIC_SLASH_SFX_PATH := "res://assets/audio/hunter/hunter_basic_fast_plasma_sword.mp3"
+const BASIC_SLASH_LEVEL_2_SFX_PATH := "res://assets/audio/hunter/hunter_basic_slash_level2_rapid_bright.mp3"
+const BASIC_SLASH_LEVEL_3_SFX_PATHS := [
+	"res://assets/audio/hunter/hunter_basic_slash_level3_fast_plasma_alt.mp3",
+	"res://assets/audio/hunter/hunter_basic_slash_level3_dark_fantasy.mp3",
+	"res://assets/audio/hunter/hunter_basic_slash_level3_rapid_bright_a.mp3",
+	"res://assets/audio/hunter/hunter_basic_slash_level3_rapid_bright_b.mp3",
+]
+const ULTIMATE_BASIC_SLASH_SFX_PATHS := [
+	"res://assets/audio/hunter/hunter_basic_slash_level3_rapid_bright_a.mp3",
+	"res://assets/audio/hunter/hunter_basic_slash_level3_rapid_bright_b.mp3",
+	"res://assets/audio/hunter/hunter_basic_slash_level3_dark_fantasy.mp3",
+]
+const SWORD_WAVE_SFX_PATH := "res://assets/audio/hunter/hunter_sword_wave_energy_slash.mp3"
+const SFX_BUS_NAME := "SFX"
 
 const DASH_VFX_COLUMNS := 4
 const DASH_VFX_ROWS := 4
@@ -110,10 +126,17 @@ var execution_slash_arc_degrees := 170.0
 var execution_slash_cell_index := 0
 var experiment_mode := false
 var player: Node
+var dash_sfx: AudioStream
+var basic_slash_sfx: AudioStream
+var basic_slash_level_2_sfx: AudioStream
+var basic_slash_level_3_sfx_pool: Array[AudioStream] = []
+var ultimate_basic_slash_sfx_pool: Array[AudioStream] = []
+var sword_wave_sfx: AudioStream
 
 
 func setup(owner: Node) -> void:
 	player = owner
+	_load_sfx()
 	_build_dash_vfx_material()
 	_emit_status()
 
@@ -172,6 +195,7 @@ func try_skill_1(input_direction: Vector2) -> void:
 	if dash_spinning_arrival_unlocked:
 		_apply_dash_arrival_spin_damage(target_position, path_targets)
 	_spawn_dash_vfx(start_position, target_position)
+	_play_sfx(dash_sfx, -8.0, 0.98, 1.04)
 	_emit_status()
 
 
@@ -215,6 +239,7 @@ func try_skill_3(input_direction: Vector2) -> void:
 	if player.has_method("play_action_animation"):
 		player.play_action_animation("attack", wave_direction, 0.12)
 	projectile_requested.emit(HUNTER_SWORD_WAVE_SCENE, player.global_position + wave_direction * 48.0, wave_direction, _get_modified_attack_damage(damage), params)
+	_play_sfx(sword_wave_sfx, -7.0, 0.96, 1.03)
 	player.last_attack_direction = wave_direction
 	if not experiment_mode:
 		sword_wave_charges = maxi(0, sword_wave_charges - 1)
@@ -564,7 +589,7 @@ func _try_slash() -> void:
 	if direction == Vector2.ZERO:
 		direction = player.last_attack_direction
 
-	var slash_targets := _find_slash_targets(direction)
+	var slash_targets := _find_execution_slash_targets(direction) if _is_execution_mode_active() else _find_slash_targets(direction)
 	if slash_targets.is_empty():
 		slash_timer = 0.0 if experiment_mode else 0.18
 		return
@@ -593,12 +618,12 @@ func _play_slash_sequence(direction: Vector2) -> void:
 		var step: Dictionary = sequence[index]
 		var delay := step_delay * float(index)
 		if delay <= 0.0:
-			_apply_slash_step(direction, step, step_damage)
+			_apply_slash_step(direction, step, step_damage, index, sequence.size())
 		else:
-			get_tree().create_timer(delay).timeout.connect(_apply_slash_step.bind(direction, step, step_damage))
+			get_tree().create_timer(delay).timeout.connect(_apply_slash_step.bind(direction, step, step_damage, index, sequence.size()))
 
 
-func _apply_slash_step(direction: Vector2, step: Dictionary, damage: int) -> void:
+func _apply_slash_step(direction: Vector2, step: Dictionary, damage: int, step_index: int, step_count: int) -> void:
 	if player == null or not is_instance_valid(player):
 		return
 
@@ -607,6 +632,7 @@ func _apply_slash_step(direction: Vector2, step: Dictionary, damage: int) -> voi
 		if is_instance_valid(enemy):
 			enemy.call("take_damage", damage, "attack")
 
+	_play_basic_slash_sfx(step_index, step_count)
 	_spawn_slash_vfx(
 		direction,
 		str(step.get("path", slash_vfx_texture_path)),
@@ -616,7 +642,8 @@ func _apply_slash_step(direction: Vector2, step: Dictionary, damage: int) -> voi
 
 
 func _get_slash_sequence() -> Array:
-	match slash_style_level:
+	var effective_style_level := maxi(slash_style_level, _get_slash_style_for_form())
+	match effective_style_level:
 		0:
 			return SLASH_VFX_STAGE_0
 		1:
@@ -1257,6 +1284,61 @@ func _spawn_ultimate_vfx(center: Vector2) -> void:
 		tween.tween_property(pulse, "color:a", 0.0, 0.28 + 0.08 * float(index))
 		tween.finished.connect(pulse.queue_free)
 	emit_world_vfx(vfx_parent, 0.7)
+
+
+func _load_sfx() -> void:
+	dash_sfx = load(DASH_SFX_PATH) as AudioStream
+	basic_slash_sfx = load(BASIC_SLASH_SFX_PATH) as AudioStream
+	basic_slash_level_2_sfx = load(BASIC_SLASH_LEVEL_2_SFX_PATH) as AudioStream
+	basic_slash_level_3_sfx_pool = _load_sfx_pool(BASIC_SLASH_LEVEL_3_SFX_PATHS)
+	ultimate_basic_slash_sfx_pool = _load_sfx_pool(ULTIMATE_BASIC_SLASH_SFX_PATHS)
+	sword_wave_sfx = load(SWORD_WAVE_SFX_PATH) as AudioStream
+
+
+func _load_sfx_pool(paths: Array) -> Array[AudioStream]:
+	var pool: Array[AudioStream] = []
+	for path in paths:
+		var stream := load(str(path)) as AudioStream
+		if stream != null:
+			pool.append(stream)
+	return pool
+
+
+func _play_basic_slash_sfx(step_index := 0, step_count := 1) -> void:
+	var multi_hit_volume_offset := -1.4 if step_count >= 3 else (-0.9 if step_count == 2 else 0.0)
+	if _is_execution_mode_active():
+		_play_sfx(_pick_sfx(ultimate_basic_slash_sfx_pool, basic_slash_sfx), -9.6 + multi_hit_volume_offset, 0.99 + 0.01 * float(step_index), 1.08 + 0.01 * float(step_index))
+		return
+
+	if slash_form_level <= 1:
+		_play_sfx(basic_slash_sfx, -10.0 + multi_hit_volume_offset, 0.98, 1.06)
+	elif slash_form_level == 2:
+		_play_sfx(basic_slash_level_2_sfx, -10.0 + multi_hit_volume_offset, 0.98, 1.06)
+	else:
+		_play_sfx(_pick_sfx(basic_slash_level_3_sfx_pool, basic_slash_level_2_sfx), -9.8 + multi_hit_volume_offset, 0.98 + 0.01 * float(step_index), 1.07 + 0.01 * float(step_index))
+
+
+func _pick_sfx(pool: Array[AudioStream], fallback: AudioStream) -> AudioStream:
+	if pool.is_empty():
+		return fallback
+	return pool[randi() % pool.size()]
+
+
+func _play_sfx(stream: AudioStream, volume_db := -8.0, min_pitch := 1.0, max_pitch := 1.0) -> void:
+	if stream == null or player == null:
+		return
+
+	var audio := AudioStreamPlayer2D.new()
+	audio.stream = stream
+	if AudioServer.get_bus_index(SFX_BUS_NAME) != -1:
+		audio.bus = SFX_BUS_NAME
+	audio.volume_db = volume_db
+	audio.pitch_scale = randf_range(min_pitch, max_pitch)
+	audio.max_distance = 1200.0
+	audio.attenuation = 0.2
+	player.add_child(audio)
+	audio.play()
+	audio.finished.connect(audio.queue_free)
 
 
 func _emit_status() -> void:

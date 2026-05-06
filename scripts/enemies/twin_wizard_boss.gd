@@ -3,6 +3,7 @@ extends CharacterBody2D
 
 signal defeated(defeat_info: Dictionary)
 
+const CombatFeedback := preload("res://scripts/ui/world_combat_feedback.gd")
 const EFFECT_FRAME_SIZE := 100
 const MAGIC_SPELL_TEXTURE := preload("res://assets/_asset_store/Free Pixel Effects Pack/1_magicspell_spritesheet.png")
 const CASTING_TEXTURE := preload("res://assets/_asset_store/Free Pixel Effects Pack/4_casting_spritesheet.png")
@@ -48,6 +49,8 @@ var enraged := false
 var empowered_by_twin_death := false
 var telegraph_nodes: Array[Node] = []
 var add_material: CanvasItemMaterial
+var health_bar := {}
+var hit_animation_timer := 0.0
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var attack_area: Area2D = $AttackArea
@@ -63,6 +66,8 @@ func _ready() -> void:
 	if sprite != null:
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		_play_animation("idle")
+	health_bar = CombatFeedback.make_health_bar(self, 145.0 if is_primary else 110.0, -132.0 if is_primary else -92.0, Color(0.78, 0.08, 0.92, 0.96))
+	CombatFeedback.update_health_bar(health_bar, current_health, max_health, false)
 
 
 func setup_player(target: Node) -> void:
@@ -90,6 +95,7 @@ func _physics_process(delta: float) -> void:
 	contact_timer = maxf(0.0, contact_timer - delta)
 	if sprite != null:
 		sprite.modulate = sprite.modulate.lerp(Color.WHITE, minf(1.0, delta * 10.0))
+		hit_animation_timer = maxf(0.0, hit_animation_timer - delta)
 		_update_animation(delta)
 
 	if not is_instance_valid(player):
@@ -117,6 +123,9 @@ func take_damage(amount: int, source := "attack") -> void:
 	if sprite != null:
 		sprite.modulate = Color(1.65, 1.35, 1.35)
 		_play_animation("hit")
+		hit_animation_timer = 0.18
+	CombatFeedback.update_health_bar(health_bar, current_health, max_health, false)
+	CombatFeedback.spawn_damage_number(self, amount, -150.0 if is_primary else -110.0, Color(0.95, 0.72, 1.0, 1.0))
 
 	if current_health <= 0:
 		is_dead = true
@@ -127,6 +136,11 @@ func take_damage(amount: int, source := "attack") -> void:
 
 
 func _process_movement(_delta: float) -> void:
+	if hit_animation_timer > 0.0:
+		velocity = Vector2.ZERO
+		move_and_slide()
+		return
+
 	var offset := player.global_position - global_position
 	var distance := offset.length()
 	var direction := offset.normalized()
@@ -329,7 +343,7 @@ func _closest_point_on_segment(point: Vector2, start: Vector2, end: Vector2) -> 
 
 
 func _scaled_windup(base_windup: float) -> float:
-	var multiplier := 1.0
+	var multiplier := 0.5
 	if enraged:
 		multiplier *= 0.82
 	if empowered_by_twin_death:
@@ -421,6 +435,8 @@ func _animate_vfx(vfx: Sprite2D, texture: Texture2D, duration: float) -> void:
 func _play_animation(name: String) -> void:
 	if current_animation == name or sprite == null:
 		return
+	if hit_animation_timer > 0.0 and name != "hit" and name != "death":
+		return
 
 	var texture := _get_animation_texture(name)
 	if texture == null:
@@ -469,3 +485,11 @@ func _make_defeat_info(source: String) -> Dictionary:
 		"boss_id": boss_id,
 		"boss_group": "twin_wizards",
 	}
+
+
+func get_health_ratio() -> float:
+	return clampf(float(current_health) / float(maxi(1, max_health)), 0.0, 1.0)
+
+
+func get_boss_display_name() -> String:
+	return "Elder Hexarch" if is_primary else "Hex Acolyte"

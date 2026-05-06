@@ -9,6 +9,13 @@ const CITY_CROSSWALK_COLUMN := -1
 const GothicWidgets := preload("res://scripts/ui/in_game_gothic_widgets.gd")
 const HUNTER_HUD_PORTRAIT_PATH := "res://assets/ui/hud/hunter_hud_portrait_face_v1.png"
 const DarkRuinsStageBuilder := preload("res://scripts/stages/dark_ruins_stage.gd")
+const SETTINGS_PATH := "user://settings.cfg"
+const SFX_BUS_NAME := "SFX"
+const RESOLUTION_OPTIONS := [
+	Vector2i(1280, 720),
+	Vector2i(1600, 900),
+	Vector2i(1920, 1080),
+]
 
 @export var bone_runner_scene: PackedScene
 @export var grave_brute_scene: PackedScene
@@ -56,6 +63,8 @@ var ultimate_charge_remainder := 0.0
 var ultimate_ready := false
 var ultimate_showing := false
 var suppress_ultimate_charge := false
+var ultimate_cooldown_visual_duration := 4.0
+var ultimate_cooldown_visual_timer := 0.0
 var experiment_mode := false
 var game_over := false
 var stage_cleared := false
@@ -91,6 +100,20 @@ var dev_upgrade_count_spinbox: SpinBox
 var dev_upgrade_status_label: Label
 var dev_upgrade_ids: Array[String] = []
 var dev_upgrade_focus_release_token := 0
+var boss_health_panel: PanelContainer
+var boss_health_rows: Array[Dictionary] = []
+var settings_panel: PanelContainer
+var settings_resolution_option: OptionButton
+var settings_fullscreen_check: CheckBox
+var settings_master_slider: HSlider
+var settings_sfx_slider: HSlider
+var settings_master_value_label: Label
+var settings_sfx_value_label: Label
+var settings_was_paused := false
+var settings_resolution_index := 2
+var settings_fullscreen := false
+var settings_master_volume := 1.0
+var settings_sfx_volume := 1.0
 var level_up_panel: Control
 var level_up_title: Label
 var level_up_option_buttons: Array[Button] = []
@@ -102,6 +125,11 @@ var final_stats_label: Label
 var ultimate_overlay: Control
 var ultimate_texture_rect: TextureRect
 var ultimate_flash_rect: ColorRect
+var ultimate_prime_sfx: AudioStream
+var ultimate_impact_sfx: AudioStream
+var ultimate_prime_vfx_sheet: Texture2D
+var ultimate_impact_vfx_sheet: Texture2D
+var ultimate_activation_vfx_material: CanvasItemMaterial
 
 @onready var background: Node2D = $Background
 @onready var city_tile_map: TileMapLayer = $Background/CityTileMap
@@ -118,7 +146,12 @@ var ultimate_flash_rect: ColorRect
 func _ready() -> void:
 	randomize()
 	_ensure_input_actions()
+	_ensure_audio_buses()
+	_load_settings()
+	_apply_audio_settings()
+	_apply_display_settings()
 	_apply_selected_character_ultimate_cutin()
+	_apply_selected_character_ultimate_assets()
 	_build_background()
 	_build_obstacles()
 	_build_ui()
@@ -152,13 +185,19 @@ func _process(delta: float) -> void:
 		wave_time += delta
 		stage_time += delta
 		_update_stage_phase()
+	if ultimate_cooldown_visual_timer > 0.0:
+		ultimate_cooldown_visual_timer = maxf(0.0, ultimate_cooldown_visual_timer - delta)
+		_update_ultimate_ui()
 	time_label.text = _format_time(elapsed_time)
 	defeated_label.text = "처치: %d" % defeated_count
 	_update_hunter_skill_slots()
+	_update_boss_health_ui()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("dev_experiment_mode"):
+	if event.is_action_pressed("settings"):
+		_toggle_settings_panel()
+	elif event.is_action_pressed("dev_experiment_mode"):
 		_set_experiment_mode(not experiment_mode)
 	elif event.is_action_pressed("ultimate"):
 		_try_use_ultimate()
@@ -462,6 +501,7 @@ func _try_use_ultimate() -> void:
 	ultimate_ready = false
 	ultimate_kills = 0
 	ultimate_charge_remainder = 0.0
+	ultimate_cooldown_visual_timer = ultimate_cooldown_visual_duration
 	_update_ultimate_ui()
 	_use_ultimate()
 
@@ -470,6 +510,8 @@ func _use_ultimate() -> void:
 	ultimate_showing = true
 	ultimate_overlay.visible = true
 	_position_ultimate_cutin(true)
+	_play_ultimate_sfx(ultimate_prime_sfx, -6.0, 0.98, 1.02)
+	_play_ultimate_activation_vfx(ultimate_prime_vfx_sheet, 0.78, 0.62)
 	get_tree().paused = true
 
 	var enter_tween := create_tween()
@@ -497,6 +539,8 @@ func _use_ultimate() -> void:
 	get_tree().paused = false
 	_play_ultimate_screen_flash()
 	_shake_ultimate_camera()
+	_play_ultimate_sfx(ultimate_impact_sfx, -4.5, 0.98, 1.02)
+	_play_ultimate_activation_vfx(ultimate_impact_vfx_sheet, 1.18, 0.68)
 	suppress_ultimate_charge = true
 	player.use_ultimate(_make_ultimate_context())
 	await get_tree().process_frame
@@ -775,6 +819,155 @@ func _apply_selected_character_ultimate_cutin() -> void:
 	ultimate_cutin_side = str(character.get("ultimate_cutin_side", ultimate_cutin_side))
 	ultimate_cutin_width_scale = float(character.get("ultimate_cutin_width_scale", ultimate_cutin_width_scale))
 	ultimate_cutin_x_offset = float(character.get("ultimate_cutin_x_offset", ultimate_cutin_x_offset))
+
+
+func _apply_selected_character_ultimate_assets() -> void:
+	var character := GameState.get_selected_character()
+	if character.is_empty():
+		return
+
+	ultimate_prime_sfx = _load_optional_audio(str(character.get("ultimate_prime_sfx", "")))
+	ultimate_impact_sfx = _load_optional_audio(str(character.get("ultimate_impact_sfx", "")))
+	ultimate_prime_vfx_sheet = _load_optional_texture(str(character.get("ultimate_prime_vfx_sheet", "")))
+	ultimate_impact_vfx_sheet = _load_optional_texture(str(character.get("ultimate_impact_vfx_sheet", "")))
+
+
+func _load_optional_audio(path: String) -> AudioStream:
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	return load(path) as AudioStream
+
+
+func _load_optional_texture(path: String) -> Texture2D:
+	if path.is_empty() or not ResourceLoader.exists(path):
+		return null
+	return load(path) as Texture2D
+
+
+func _ensure_audio_buses() -> void:
+	if AudioServer.get_bus_index(SFX_BUS_NAME) != -1:
+		return
+
+	AudioServer.add_bus()
+	var sfx_index := AudioServer.get_bus_count() - 1
+	AudioServer.set_bus_name(sfx_index, SFX_BUS_NAME)
+	AudioServer.set_bus_send(sfx_index, "Master")
+
+
+func _load_settings() -> void:
+	var config := ConfigFile.new()
+	if config.load(SETTINGS_PATH) != OK:
+		return
+
+	settings_resolution_index = clampi(int(config.get_value("display", "resolution_index", settings_resolution_index)), 0, RESOLUTION_OPTIONS.size() - 1)
+	settings_fullscreen = bool(config.get_value("display", "fullscreen", settings_fullscreen))
+	settings_master_volume = clampf(float(config.get_value("audio", "master_volume", settings_master_volume)), 0.0, 1.0)
+	settings_sfx_volume = clampf(float(config.get_value("audio", "sfx_volume", settings_sfx_volume)), 0.0, 1.0)
+
+
+func _save_settings() -> void:
+	var config := ConfigFile.new()
+	config.set_value("display", "resolution_index", settings_resolution_index)
+	config.set_value("display", "fullscreen", settings_fullscreen)
+	config.set_value("audio", "master_volume", settings_master_volume)
+	config.set_value("audio", "sfx_volume", settings_sfx_volume)
+	config.save(SETTINGS_PATH)
+
+
+func _apply_audio_settings() -> void:
+	_ensure_audio_buses()
+	_set_bus_volume("Master", settings_master_volume)
+	_set_bus_volume(SFX_BUS_NAME, settings_sfx_volume)
+
+
+func _set_bus_volume(bus_name: String, linear_value: float) -> void:
+	var bus_index := AudioServer.get_bus_index(bus_name)
+	if bus_index < 0:
+		return
+	AudioServer.set_bus_mute(bus_index, linear_value <= 0.001)
+	AudioServer.set_bus_volume_db(bus_index, linear_to_db(clampf(linear_value, 0.001, 1.0)))
+
+
+func _apply_display_settings() -> void:
+	var resolution: Vector2i = RESOLUTION_OPTIONS[clampi(settings_resolution_index, 0, RESOLUTION_OPTIONS.size() - 1)]
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if settings_fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
+	if not settings_fullscreen:
+		DisplayServer.window_set_size(resolution)
+		var screen_position := DisplayServer.screen_get_position()
+		var screen_size := DisplayServer.screen_get_size()
+		var centered_position := screen_position + Vector2i(
+			int((screen_size.x - resolution.x) * 0.5),
+			int((screen_size.y - resolution.y) * 0.5)
+		)
+		DisplayServer.window_set_position(centered_position)
+
+
+func _toggle_settings_panel() -> void:
+	if settings_panel != null and settings_panel.visible:
+		_close_settings_panel()
+	else:
+		_open_settings_panel()
+
+
+func _open_settings_panel() -> void:
+	if settings_panel == null or game_over or ultimate_showing:
+		return
+	settings_was_paused = get_tree().paused
+	get_tree().paused = true
+	settings_panel.visible = true
+	settings_panel.move_to_front()
+	_sync_settings_controls()
+
+
+func _close_settings_panel() -> void:
+	if settings_panel == null:
+		return
+	settings_panel.visible = false
+	if not settings_was_paused and not game_over:
+		get_tree().paused = false
+
+
+func _sync_settings_controls() -> void:
+	if settings_resolution_option != null:
+		settings_resolution_option.select(clampi(settings_resolution_index, 0, RESOLUTION_OPTIONS.size() - 1))
+	if settings_fullscreen_check != null:
+		settings_fullscreen_check.button_pressed = settings_fullscreen
+	if settings_master_slider != null:
+		settings_master_slider.set_value_no_signal(settings_master_volume)
+	if settings_sfx_slider != null:
+		settings_sfx_slider.set_value_no_signal(settings_sfx_volume)
+	_update_settings_volume_labels()
+
+
+func _apply_settings_from_panel() -> void:
+	if settings_resolution_option != null:
+		settings_resolution_index = clampi(settings_resolution_option.selected, 0, RESOLUTION_OPTIONS.size() - 1)
+	if settings_fullscreen_check != null:
+		settings_fullscreen = settings_fullscreen_check.button_pressed
+	settings_master_volume = float(settings_master_slider.value) if settings_master_slider != null else settings_master_volume
+	settings_sfx_volume = float(settings_sfx_slider.value) if settings_sfx_slider != null else settings_sfx_volume
+	_apply_audio_settings()
+	_apply_display_settings()
+	_save_settings()
+
+
+func _on_master_volume_changed(value: float) -> void:
+	settings_master_volume = clampf(value, 0.0, 1.0)
+	_apply_audio_settings()
+	_update_settings_volume_labels()
+
+
+func _on_sfx_volume_changed(value: float) -> void:
+	settings_sfx_volume = clampf(value, 0.0, 1.0)
+	_apply_audio_settings()
+	_update_settings_volume_labels()
+
+
+func _update_settings_volume_labels() -> void:
+	if settings_master_value_label != null:
+		settings_master_value_label.text = "%d%%" % int(round(settings_master_volume * 100.0))
+	if settings_sfx_value_label != null:
+		settings_sfx_value_label.text = "%d%%" % int(round(settings_sfx_volume * 100.0))
 
 
 func _build_background() -> void:
@@ -1070,6 +1263,8 @@ func _build_ui() -> void:
 	time_label.add_theme_color_override("font_color", Color(0.94, 0.9, 0.84))
 	hud.add_child(time_label)
 
+	_build_boss_health_panel(hud)
+
 	var right_status := VBoxContainer.new()
 	right_status.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	right_status.offset_left = -430
@@ -1105,7 +1300,213 @@ func _build_ui() -> void:
 	_build_dev_upgrade_panel(hud)
 	_build_level_up_panel(hud)
 	_build_game_over_panel(hud)
+	_build_settings_panel(hud)
 	_build_ultimate_overlay(hud)
+
+
+func _build_boss_health_panel(parent: Control) -> void:
+	boss_health_panel = PanelContainer.new()
+	boss_health_panel.visible = false
+	boss_health_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boss_health_panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	boss_health_panel.offset_left = 560
+	boss_health_panel.offset_top = 70
+	boss_health_panel.offset_right = -560
+	boss_health_panel.offset_bottom = 154
+	boss_health_panel.add_theme_stylebox_override("panel", _make_gothic_panel_style(Color(0.025, 0.016, 0.022, 0.78), Color(0.65, 0.28, 0.36, 0.92), 1))
+	parent.add_child(boss_health_panel)
+
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 6)
+	boss_health_panel.add_child(content)
+
+	for index in range(2):
+		var row := HBoxContainer.new()
+		row.visible = false
+		row.add_theme_constant_override("separation", 10)
+		content.add_child(row)
+
+		var name_label := Label.new()
+		name_label.custom_minimum_size = Vector2(138, 28)
+		name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		name_label.add_theme_font_size_override("font_size", 17)
+		name_label.add_theme_color_override("font_color", Color(0.96, 0.82, 0.74))
+		row.add_child(name_label)
+
+		var bar := ProgressBar.new()
+		bar.custom_minimum_size = Vector2(420, 24)
+		bar.max_value = 1.0
+		bar.value = 1.0
+		bar.show_percentage = false
+		bar.add_theme_stylebox_override("background", _make_gothic_panel_style(Color(0.02, 0.01, 0.012, 0.92), Color(0.32, 0.16, 0.2, 0.95), 1))
+		bar.add_theme_stylebox_override("fill", _make_gothic_panel_style(Color(0.78, 0.06, 0.1, 0.96), Color(0.95, 0.42, 0.38, 0.0), 0))
+		row.add_child(bar)
+
+		boss_health_rows.append({
+			"row": row,
+			"name": name_label,
+			"bar": bar,
+		})
+
+
+func _update_boss_health_ui() -> void:
+	if boss_health_panel == null:
+		return
+
+	var bosses: Array[Node] = []
+	for boss in get_tree().get_nodes_in_group("bosses"):
+		if is_instance_valid(boss) and not boss.is_queued_for_deletion():
+			bosses.append(boss)
+
+	boss_health_panel.visible = not bosses.is_empty()
+	for index in range(boss_health_rows.size()):
+		var row_data: Dictionary = boss_health_rows[index]
+		var row := row_data.get("row") as Control
+		var name_label := row_data.get("name") as Label
+		var bar := row_data.get("bar") as ProgressBar
+		var has_boss := index < bosses.size()
+		if row != null:
+			row.visible = has_boss
+		if not has_boss:
+			continue
+
+		var boss := bosses[index]
+		var ratio := 1.0
+		if boss.has_method("get_health_ratio"):
+			ratio = float(boss.call("get_health_ratio"))
+		else:
+			var current_health_value: Variant = boss.get("current_health")
+			var max_health_value: Variant = boss.get("max_health")
+			if current_health_value != null and max_health_value != null:
+				ratio = clampf(float(current_health_value) / float(maxi(1, int(max_health_value))), 0.0, 1.0)
+
+		if name_label != null:
+			name_label.text = str(boss.call("get_boss_display_name")) if boss.has_method("get_boss_display_name") else "Boss"
+		if bar != null:
+			bar.value = ratio
+
+
+func _build_settings_panel(parent: Control) -> void:
+	settings_panel = PanelContainer.new()
+	settings_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	settings_panel.visible = false
+	settings_panel.set_anchors_preset(Control.PRESET_CENTER)
+	settings_panel.custom_minimum_size = Vector2(460, 390)
+	settings_panel.offset_left = -230
+	settings_panel.offset_top = -195
+	settings_panel.offset_right = 230
+	settings_panel.offset_bottom = 195
+	settings_panel.add_theme_stylebox_override("panel", _make_gothic_panel_style(Color(0.025, 0.018, 0.024, 0.94), Color(0.74, 0.38, 0.34, 0.95), 2))
+	parent.add_child(settings_panel)
+
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 14)
+	settings_panel.add_child(content)
+
+	var title := Label.new()
+	title.text = "SETTINGS"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_color_override("font_color", Color(0.96, 0.84, 0.68))
+	content.add_child(title)
+
+	settings_resolution_option = OptionButton.new()
+	settings_resolution_option.focus_mode = Control.FOCUS_NONE
+	for resolution in RESOLUTION_OPTIONS:
+		settings_resolution_option.add_item("%d x %d" % [resolution.x, resolution.y])
+	settings_resolution_option.select(clampi(settings_resolution_index, 0, RESOLUTION_OPTIONS.size() - 1))
+	content.add_child(_make_settings_row("Resolution", settings_resolution_option))
+
+	settings_fullscreen_check = CheckBox.new()
+	settings_fullscreen_check.text = "Fullscreen"
+	settings_fullscreen_check.focus_mode = Control.FOCUS_NONE
+	settings_fullscreen_check.button_pressed = settings_fullscreen
+	content.add_child(_make_settings_row("Window", settings_fullscreen_check))
+
+	var master_row := _make_volume_row("Master")
+	settings_master_slider = master_row["slider"]
+	settings_master_value_label = master_row["value_label"]
+	settings_master_slider.value = settings_master_volume
+	settings_master_slider.value_changed.connect(_on_master_volume_changed)
+	content.add_child(master_row["row"])
+
+	var sfx_row := _make_volume_row("SFX")
+	settings_sfx_slider = sfx_row["slider"]
+	settings_sfx_value_label = sfx_row["value_label"]
+	settings_sfx_slider.value = settings_sfx_volume
+	settings_sfx_slider.value_changed.connect(_on_sfx_volume_changed)
+	content.add_child(sfx_row["row"])
+	_update_settings_volume_labels()
+
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 10)
+	content.add_child(buttons)
+
+	var apply_button := Button.new()
+	apply_button.text = "Apply"
+	apply_button.custom_minimum_size = Vector2(130, 38)
+	apply_button.focus_mode = Control.FOCUS_NONE
+	apply_button.pressed.connect(_apply_settings_from_panel)
+	buttons.add_child(apply_button)
+
+	var resume_button := Button.new()
+	resume_button.text = "Resume"
+	resume_button.custom_minimum_size = Vector2(130, 38)
+	resume_button.focus_mode = Control.FOCUS_NONE
+	resume_button.pressed.connect(_close_settings_panel)
+	buttons.add_child(resume_button)
+
+
+func _make_settings_row(label_text: String, control: Control) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(120, 34)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 16)
+	label.add_theme_color_override("font_color", Color(0.9, 0.78, 0.64))
+	row.add_child(label)
+
+	control.custom_minimum_size = Vector2(260, 34)
+	row.add_child(control)
+	return row
+
+
+func _make_volume_row(label_text: String) -> Dictionary:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(120, 34)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 16)
+	label.add_theme_color_override("font_color", Color(0.9, 0.78, 0.64))
+	row.add_child(label)
+
+	var slider := HSlider.new()
+	slider.min_value = 0.0
+	slider.max_value = 1.0
+	slider.step = 0.01
+	slider.custom_minimum_size = Vector2(200, 34)
+	slider.focus_mode = Control.FOCUS_NONE
+	row.add_child(slider)
+
+	var value_label := Label.new()
+	value_label.custom_minimum_size = Vector2(50, 34)
+	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value_label.add_theme_font_size_override("font_size", 15)
+	value_label.add_theme_color_override("font_color", Color(0.82, 0.9, 1.0))
+	row.add_child(value_label)
+
+	return {
+		"row": row,
+		"slider": slider,
+		"value_label": value_label,
+	}
 
 
 func _build_hunter_skill_slots(parent: Control, character: Dictionary, theme_color: Color, accent_color: Color) -> void:
@@ -1409,6 +1810,9 @@ func _jump_to_stage(target_stage: int) -> void:
 	stage_state = "wave"
 	current_enemy_pool.clear()
 
+	if player != null and player.has_method("set_experiment_mode"):
+		player.set_experiment_mode(false)
+
 	if target_stage <= 3 and experiment_mode:
 		_set_experiment_mode(false)
 
@@ -1422,7 +1826,7 @@ func _jump_to_stage(target_stage: int) -> void:
 		_spawn_twin_bosses()
 
 	if dev_upgrade_status_label != null:
-		dev_upgrade_status_label.text = "Jumped to Stage %d." % target_stage
+		dev_upgrade_status_label.text = "Jumped to Stage %d. Combat cooldowns normal." % target_stage
 
 
 func _on_dev_upgrade_count_text_changed(_new_text: String) -> void:
@@ -1599,6 +2003,61 @@ func _ultimate_cutin_target_position() -> Vector2:
 	return Vector2(x, 0.0)
 
 
+func _play_ultimate_sfx(stream: AudioStream, volume_db := -6.0, min_pitch := 1.0, max_pitch := 1.0) -> void:
+	if stream == null:
+		return
+
+	var audio := AudioStreamPlayer.new()
+	audio.process_mode = Node.PROCESS_MODE_ALWAYS
+	audio.stream = stream
+	audio.bus = SFX_BUS_NAME
+	audio.volume_db = volume_db
+	audio.pitch_scale = randf_range(min_pitch, max_pitch)
+	add_child(audio)
+	audio.play()
+	audio.finished.connect(audio.queue_free)
+
+
+func _play_ultimate_activation_vfx(texture: Texture2D, scale_amount: float, duration: float) -> void:
+	if texture == null or player == null or ultimate_vfx_container == null:
+		return
+
+	if ultimate_activation_vfx_material == null:
+		ultimate_activation_vfx_material = CanvasItemMaterial.new()
+		ultimate_activation_vfx_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+
+	var sprite := Sprite2D.new()
+	sprite.process_mode = Node.PROCESS_MODE_ALWAYS
+	sprite.texture = texture
+	sprite.region_enabled = true
+	sprite.region_rect = Rect2(Vector2.ZERO, Vector2(256.0, 256.0))
+	sprite.centered = true
+	sprite.global_position = player.global_position + Vector2(0.0, -18.0)
+	sprite.scale = Vector2.ONE * scale_amount
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	sprite.material = ultimate_activation_vfx_material
+	sprite.z_index = 96
+	ultimate_vfx_container.add_child(sprite)
+	_animate_ultimate_activation_vfx(sprite, texture, duration)
+
+
+func _animate_ultimate_activation_vfx(sprite: Sprite2D, texture: Texture2D, duration: float) -> void:
+	var frame_size := Vector2(256.0, 256.0)
+	var columns := maxi(1, int(texture.get_width() / int(frame_size.x)))
+	var rows := maxi(1, int(texture.get_height() / int(frame_size.y)))
+	var frame_count := mini(16, columns * rows)
+	var frame_time := maxf(0.02, duration / float(maxi(1, frame_count)))
+	for frame in range(frame_count):
+		if not is_instance_valid(sprite):
+			return
+		var column := frame % columns
+		var row := int(frame / columns)
+		sprite.region_rect = Rect2(Vector2(column, row) * frame_size, frame_size)
+		await get_tree().create_timer(frame_time, true, false, true).timeout
+	if is_instance_valid(sprite):
+		sprite.queue_free()
+
+
 func _play_ultimate_screen_flash() -> void:
 	if ultimate_flash_rect == null:
 		return
@@ -1622,20 +2081,30 @@ func _shake_ultimate_camera() -> void:
 
 func _update_ultimate_ui() -> void:
 	var progress := 1.0 if ultimate_ready else float(ultimate_kills) / maxf(1.0, float(ultimate_required_kills))
+	var cooling_down := ultimate_cooldown_visual_timer > 0.0
+	if cooling_down:
+		progress = ultimate_cooldown_visual_timer / maxf(0.1, ultimate_cooldown_visual_duration)
 	if ultimate_portrait_ring != null and ultimate_portrait_ring.has_method("set_charge"):
-		ultimate_portrait_ring.set_charge(progress, ultimate_ready)
+		ultimate_portrait_ring.set_charge(progress, ultimate_ready and not cooling_down)
 
 	if ultimate_bar != null:
-		ultimate_bar.max_value = ultimate_required_kills
-		ultimate_bar.value = ultimate_required_kills if ultimate_ready else ultimate_kills
+		if cooling_down:
+			ultimate_bar.max_value = 1.0
+			ultimate_bar.value = progress
+		else:
+			ultimate_bar.max_value = ultimate_required_kills
+			ultimate_bar.value = ultimate_required_kills if ultimate_ready else ultimate_kills
 	if ultimate_label != null:
-		ultimate_label.text = "ULT READY  Q" if ultimate_ready else "ULT %d/%d" % [ultimate_kills, ultimate_required_kills]
+		if cooling_down:
+			ultimate_label.text = "ULT %.1fs" % ultimate_cooldown_visual_timer
+		else:
+			ultimate_label.text = "ULT READY  Q" if ultimate_ready else "ULT %d/%d" % [ultimate_kills, ultimate_required_kills]
 
 
 func _set_experiment_mode(enabled: bool) -> void:
 	experiment_mode = enabled
 	if player != null and player.has_method("set_experiment_mode"):
-		player.set_experiment_mode(experiment_mode)
+		player.set_experiment_mode(false)
 
 	if spawn_timer != null:
 		if experiment_mode:
@@ -1681,6 +2150,7 @@ func _ensure_input_actions() -> void:
 	_set_key_action("barrier", [KEY_F])
 	_set_key_action("sword_wave", [KEY_E])
 	_set_key_action("dev_experiment_mode", [KEY_F10])
+	_set_key_action("settings", [KEY_ESCAPE])
 
 
 func _set_key_action(action_name: StringName, keys: Array) -> void:

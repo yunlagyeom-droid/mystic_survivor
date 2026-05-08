@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://duqkx046iuxkc"
+path="res://.godot/imported/001_meow.wav-b01ce10ce7edf81477d046fa4f32f0ab.sample"
+
+[deps]
+
+source_file="res://voice assets/Catgirl Fighting SFX/meow/001_meow.wav"
+dest_files=["res://.godot/imported/001_meow.wav-b01ce10ce7edf81477d046fa4f32f0ab.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://dupqbxi4js2qr"
+path="res://.godot/imported/wind.wav-982b9ea1ea0eaea6422426ca2a7ff838.sample"
+
+[deps]
+
+source_file="res://voice assets/RPG Voice Starter Pack/Type 2/wind.wav"
+dest_files=["res://.godot/imported/wind.wav-982b9ea1ea0eaea6422426ca2a7ff838.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

@@ -279,6 +279,8 @@ func _try_fireball() -> void:
 	if direction == Vector2.ZERO:
 		direction = Vector2.RIGHT
 
+	if player.has_method("try_play_attack_voice"):
+		player.try_play_attack_voice("basic")
 	projectile_requested.emit(FIREBALL_SCENE, player.global_position + direction * 40.0, direction, _get_modified_attack_damage(fireball_damage), {})
 	attack_timer = 0.0 if experiment_mode else _get_basic_attack_cooldown(attack_cooldown)
 
@@ -307,6 +309,8 @@ func _try_blink(input_direction: Vector2) -> void:
 		blink_timer = blink_cooldown
 	player.set_invulnerable(blink_invulnerable_duration)
 	player.last_direction = blink_direction
+	if player.has_method("play_mobility_voice"):
+		player.play_mobility_voice()
 	player.update_walk_animation(blink_direction, blink_distance)
 	_spawn_blink_vfx(start_position, target_position)
 	_apply_blink_arrival_damage(target_position)

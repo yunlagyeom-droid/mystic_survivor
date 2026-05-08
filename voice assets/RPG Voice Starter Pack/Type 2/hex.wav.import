@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://dbvliesag7lum"
+path="res://.godot/imported/hex.wav-22f6908540f5e3c6fb3ce05e95e99e3f.sample"
+
+[deps]
+
+source_file="res://voice assets/RPG Voice Starter Pack/Type 2/hex.wav"
+dest_files=["res://.godot/imported/hex.wav-22f6908540f5e3c6fb3ce05e95e99e3f.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/pickups/magnet_pickup.gd" id="magnet_script"]
+
+[sub_resource type="CircleShape2D" id="pickup_shape"]
+radius = 24.0
+
+[node name="MagnetPickup" type="Area2D"]
+collision_layer = 8
+collision_mask = 1
+script = ExtResource("magnet_script")
+
+[node name="Glow" type="Polygon2D" parent="."]
+color = Color(0.55, 0.95, 1, 0.32)
+polygon = PackedVector2Array(0, -28, 28, 0, 0, 28, -28, 0)
+
+[node name="RangeRing" type="Line2D" parent="."]
+width = 2.6
+default_color = Color(0.52, 0.92, 1, 0.62)
+closed = true
+points = PackedVector2Array(0, -24, 12, -20.7846, 20.7846, -12, 24, 0, 20.7846, 12, 12, 20.7846, 0, 24, -12, 20.7846, -20.7846, 12, -24, 0, -20.7846, -12, -12, -20.7846)
+
+[node name="Core" type="Polygon2D" parent="."]
+color = Color(0.72, 1, 1, 1)
+polygon = PackedVector2Array(-12, -14, 12, -14, 12, -6, 4, -6, 4, 10, -4, 10, -4, -6, -12, -6)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("pickup_shape")

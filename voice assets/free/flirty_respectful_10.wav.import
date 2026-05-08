@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://4gj3u3ht4tdl"
+path="res://.godot/imported/flirty_respectful_10.wav-c50889645e13d9dc29996d09b5b48efb.sample"
+
+[deps]
+
+source_file="res://voice assets/free/flirty_respectful_10.wav"
+dest_files=["res://.godot/imported/flirty_respectful_10.wav-c50889645e13d9dc29996d09b5b48efb.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

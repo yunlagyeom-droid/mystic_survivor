@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://sguf5brq2v7f"
+path="res://.godot/imported/healed1.wav-d70b889208046827e919c80ed3591673.sample"
+
+[deps]
+
+source_file="res://voice assets/RPG Voice Starter Pack/Type 1/healed1.wav"
+dest_files=["res://.godot/imported/healed1.wav-d70b889208046827e919c80ed3591673.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://cmc5vgkmyrfmi"
+path="res://.godot/imported/002_congratulations.wav-d4cd9ad7368a076e122689565b2351f4.sample"
+
+[deps]
+
+source_file="res://voice assets/Catgirl Fighting SFX/congratulations/002_congratulations.wav"
+dest_files=["res://.godot/imported/002_congratulations.wav-d4cd9ad7368a076e122689565b2351f4.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

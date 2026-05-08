@@ -38,3 +38,7 @@
 
 ## godot engine 경로
 -  D:\Games\Godot_v4.6.2-stable_win64.exe\Godot_v4.6.2-stable_win64_console.exe
+## Codex Godot run rule
+- When Codex needs to check Godot from the terminal, use `tools/godot_headless_check.ps1` first.
+- This script runs Godot in headless import mode and redirects Godot editor data/cache paths into `tmp/godot_sandbox/`.
+- Use direct GUI/editor launch only when the user explicitly needs it.

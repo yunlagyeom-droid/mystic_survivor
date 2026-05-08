@@ -10,6 +10,10 @@ signal combat_status_changed(skill_1_text: String, skill_2_text: String, skill_3
 signal died
 
 const COMMON_UPGRADE_MAX_LEVEL := 10
+const SFX_BUS_NAME := "SFX"
+const VOICE_ROOT_PATH := "res://voice assets/RPG Voice Starter Pack"
+const MAGE_VOICE_TYPE := "Type 1"
+const HUNTER_VOICE_TYPE := "Type 2"
 const COMMON_UPGRADE_DEFINITIONS := {
 	"common_attack_damage": {
 		"label": "공격력 강화",
@@ -120,6 +124,12 @@ var is_dead := false
 var experiment_mode := false
 var combat: Node
 var combat_modulate := Color.WHITE
+var attack_voice_pool: Array[AudioStream] = []
+var mobility_voice_pool: Array[AudioStream] = []
+var sword_wave_voice: AudioStream
+var damaged_voice_pool: Array[AudioStream] = []
+var attack_voice_timer := 0.0
+var damaged_voice_timer := 0.0
 
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var weapon_sprite: Sprite2D = $WeaponSprite2D
@@ -132,6 +142,7 @@ func _ready() -> void:
 	required_experience = level_required_base
 	add_to_group("player")
 	_apply_selected_character_sprite()
+	_load_voice_sfx()
 	_build_combat()
 	health_changed.emit(current_health, max_health)
 	experience_changed.emit(experience, required_experience, level)
@@ -164,6 +175,8 @@ func _physics_process(delta: float) -> void:
 	update_walk_animation(movement_direction, moved_distance, delta)
 
 	invulnerable_timer = maxf(0.0, invulnerable_timer - delta)
+	attack_voice_timer = maxf(0.0, attack_voice_timer - delta)
+	damaged_voice_timer = maxf(0.0, damaged_voice_timer - delta)
 	if combat != null:
 		combat.combat_process(delta, input_direction)
 	_update_player_modulate()
@@ -193,6 +206,7 @@ func take_damage(amount: int) -> void:
 	current_health = maxi(0, current_health - amount)
 	invulnerable_timer = 0.45
 	health_changed.emit(current_health, max_health)
+	try_play_damaged_voice()
 
 	if current_health <= 0:
 		is_dead = true
@@ -321,12 +335,118 @@ func get_basic_attack_cooldown(base_cooldown: float) -> float:
 	return maxf(0.01, base_cooldown / get_attack_speed_multiplier())
 
 
+func try_play_attack_voice(context := "basic") -> void:
+	if attack_voice_timer > 0.0:
+		return
+
+	var stream: AudioStream = null
+	if context == "sword_wave":
+		if randf() > 0.82:
+			return
+		stream = sword_wave_voice
+		attack_voice_timer = 0.42
+	else:
+		if randf() > 0.28:
+			return
+		stream = _pick_voice_stream(attack_voice_pool)
+		attack_voice_timer = 0.62
+
+	_play_voice_sfx(stream, -9.0, 0.97, 1.04)
+
+
+func try_play_damaged_voice() -> void:
+	if damaged_voice_timer > 0.0:
+		return
+	if randf() > 0.72:
+		return
+
+	damaged_voice_timer = 0.75
+	_play_voice_sfx(_pick_voice_stream(damaged_voice_pool), -8.0, 0.96, 1.03)
+
+
+func play_mobility_voice(delay_seconds := 0.0, volume_db := -6.8) -> void:
+	var stream := _pick_voice_stream(mobility_voice_pool)
+	if stream == null:
+		return
+	if delay_seconds <= 0.0:
+		_play_voice_sfx(stream, volume_db, 0.97, 1.04)
+		return
+	_play_voice_sfx_delayed(stream, delay_seconds, volume_db, 0.97, 1.04)
+
+
 func _is_common_upgrade(upgrade_id: String) -> bool:
 	return COMMON_UPGRADE_DEFINITIONS.has(upgrade_id)
 
 
 func _get_common_upgrade_level(upgrade_id: String) -> int:
 	return int(common_upgrade_levels.get(upgrade_id, 0))
+
+
+func _load_voice_sfx() -> void:
+	var voice_folder := _get_selected_character_voice_folder()
+	attack_voice_pool = _load_voice_pool([
+		"%s/attack1.wav" % voice_folder,
+		"%s/attack2.wav" % voice_folder,
+		"%s/attack3.wav" % voice_folder,
+	])
+	mobility_voice_pool = _load_voice_pool([
+		"%s/jump1.wav" % voice_folder,
+		"%s/jump2.wav" % voice_folder,
+		"%s/jump3.wav" % voice_folder,
+	])
+	sword_wave_voice = load("%s/attack3.wav" % voice_folder) as AudioStream
+	damaged_voice_pool = _load_voice_pool([
+		"%s/damaged1.wav" % voice_folder,
+		"%s/damaged2.wav" % voice_folder,
+		"%s/damaged3.wav" % voice_folder,
+	])
+
+
+func _get_selected_character_voice_folder() -> String:
+	var character_id := str(GameState.get_selected_character().get("id", GameState.selected_character_id))
+	var voice_type := MAGE_VOICE_TYPE
+	if character_id.begins_with("hunter"):
+		voice_type = HUNTER_VOICE_TYPE
+	return "%s/%s" % [VOICE_ROOT_PATH, voice_type]
+
+
+func _load_voice_pool(paths: Array) -> Array[AudioStream]:
+	var pool: Array[AudioStream] = []
+	for path in paths:
+		var stream := load(str(path)) as AudioStream
+		if stream != null:
+			pool.append(stream)
+	return pool
+
+
+func _pick_voice_stream(pool: Array[AudioStream]) -> AudioStream:
+	if pool.is_empty():
+		return null
+	return pool[randi() % pool.size()]
+
+
+func _play_voice_sfx(stream: AudioStream, volume_db := -8.0, min_pitch := 1.0, max_pitch := 1.0) -> void:
+	if stream == null:
+		return
+
+	var audio := AudioStreamPlayer2D.new()
+	audio.stream = stream
+	if AudioServer.get_bus_index(SFX_BUS_NAME) != -1:
+		audio.bus = SFX_BUS_NAME
+	audio.volume_db = volume_db
+	audio.pitch_scale = randf_range(min_pitch, max_pitch)
+	audio.max_distance = 900.0
+	audio.attenuation = 0.25
+	add_child(audio)
+	audio.play()
+	audio.finished.connect(audio.queue_free)
+
+
+func _play_voice_sfx_delayed(stream: AudioStream, delay_seconds: float, volume_db := -8.0, min_pitch := 1.0, max_pitch := 1.0) -> void:
+	await get_tree().create_timer(delay_seconds).timeout
+	if is_dead or not is_inside_tree():
+		return
+	_play_voice_sfx(stream, volume_db, min_pitch, max_pitch)
 
 
 func _apply_common_upgrade(upgrade_id: String) -> void:

@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://di7wbd2cbuopc"
+path="res://.godot/imported/flirty_playful_09.wav-31f5c6cba1c59e03fff188296f8d818e.sample"
+
+[deps]
+
+source_file="res://voice assets/free/flirty_playful_09.wav"
+dest_files=["res://.godot/imported/flirty_playful_09.wav-31f5c6cba1c59e03fff188296f8d818e.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

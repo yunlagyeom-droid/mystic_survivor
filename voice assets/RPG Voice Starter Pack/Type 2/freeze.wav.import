@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://bwbkswtrwqgjf"
+path="res://.godot/imported/freeze.wav-7d319b4924e874e82e2d269081268f19.sample"
+
+[deps]
+
+source_file="res://voice assets/RPG Voice Starter Pack/Type 2/freeze.wav"
+dest_files=["res://.godot/imported/freeze.wav-7d319b4924e874e82e2d269081268f19.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

@@ -9,6 +9,9 @@ const CITY_CROSSWALK_COLUMN := -1
 const GothicWidgets := preload("res://scripts/ui/in_game_gothic_widgets.gd")
 const HUNTER_HUD_PORTRAIT_PATH := "res://assets/ui/hud/hunter_hud_portrait_face_v1.png"
 const DarkRuinsStageBuilder := preload("res://scripts/stages/dark_ruins_stage.gd")
+const DEV_TRAINING_DUMMY_SCENE := preload("res://scenes/enemies/TrainingDummy.tscn")
+const DEV_TRAINING_DUMMY_TEXTURE := preload("res://assets/_asset_store/Warrior/SpriteSheet/Warrior_SheetnoEffect.png")
+const MAGNET_PICKUP_SCENE := preload("res://scenes/pickups/MagnetPickup.tscn")
 const SETTINGS_PATH := "user://settings.cfg"
 const SFX_BUS_NAME := "SFX"
 const RESOLUTION_OPTIONS := [
@@ -55,6 +58,8 @@ const RESOLUTION_OPTIONS := [
 @export var ultimate_radius := 720.0
 @export var show_experiment_mode_button := true
 @export var show_dev_upgrade_tools := true
+@export var small_magnet_drop_chance := 0.02
+@export var small_magnet_collect_radius := 560.0
 
 var elapsed_time := 0.0
 var defeated_count := 0
@@ -98,6 +103,9 @@ var dev_upgrade_panel: PanelContainer
 var dev_upgrade_selector: OptionButton
 var dev_upgrade_count_spinbox: SpinBox
 var dev_upgrade_status_label: Label
+var dev_dummy_button: Button
+var dev_dummy_placement_active := false
+var dev_dummy_preview: Sprite2D
 var dev_upgrade_ids: Array[String] = []
 var dev_upgrade_focus_release_token := 0
 var boss_health_panel: PanelContainer
@@ -129,6 +137,8 @@ var ultimate_prime_sfx: AudioStream
 var ultimate_impact_sfx: AudioStream
 var ultimate_prime_vfx_sheet: Texture2D
 var ultimate_impact_vfx_sheet: Texture2D
+var ultimate_prime_vfx_rotate := false
+var ultimate_prime_vfx_forward_offset := 0.0
 var ultimate_activation_vfx_material: CanvasItemMaterial
 
 @onready var background: Node2D = $Background
@@ -188,13 +198,21 @@ func _process(delta: float) -> void:
 	if ultimate_cooldown_visual_timer > 0.0:
 		ultimate_cooldown_visual_timer = maxf(0.0, ultimate_cooldown_visual_timer - delta)
 		_update_ultimate_ui()
+	_update_dev_dummy_preview()
 	time_label.text = _format_time(elapsed_time)
 	defeated_label.text = "처치: %d" % defeated_count
 	_update_hunter_skill_slots()
 	_update_boss_health_ui()
 
 
+func _input(event: InputEvent) -> void:
+	_handle_dev_dummy_placement_input(event)
+
+
 func _unhandled_input(event: InputEvent) -> void:
+	if _handle_dev_dummy_placement_input(event):
+		return
+
 	if event.is_action_pressed("settings"):
 		_toggle_settings_panel()
 	elif event.is_action_pressed("dev_experiment_mode"):
@@ -414,6 +432,8 @@ func _on_enemy_defeated(defeat_info: Dictionary) -> void:
 
 	if experience_value > 0:
 		call_deferred("_spawn_experience_gem", spawn_position, experience_value)
+	if counts_as_defeat and not is_boss:
+		_try_spawn_small_magnet(spawn_position)
 	if is_boss:
 		call_deferred("_on_boss_defeated", defeat_info)
 
@@ -436,9 +456,12 @@ func _on_boss_defeated(defeat_info: Dictionary) -> void:
 		if active_bosses > 0:
 			_empower_remaining_twin_bosses()
 			return
+		call_deferred("_spawn_full_magnet", Vector2(defeat_info.get("position", player.global_position if player != null else Vector2.ZERO)))
 		call_deferred("_on_stage_cleared")
 		return
 
+	if stage_index % 5 == 0:
+		call_deferred("_spawn_full_magnet", Vector2(defeat_info.get("position", player.global_position if player != null else Vector2.ZERO)))
 	call_deferred("_on_stage_cleared")
 
 
@@ -455,6 +478,47 @@ func _spawn_experience_gem(spawn_position: Vector2, experience_value: int) -> vo
 	var gem := experience_gem_scene.instantiate() as ExperienceGem
 	gem_container.add_child(gem)
 	gem.setup(spawn_position, experience_value)
+
+
+func _try_spawn_small_magnet(spawn_position: Vector2) -> void:
+	var chance := small_magnet_drop_chance
+	if player != null and player.has_method("get_luck_multiplier"):
+		chance *= player.get_luck_multiplier()
+	if randf() <= chance:
+		call_deferred("_spawn_magnet_pickup", spawn_position, false)
+
+
+func _spawn_full_magnet(spawn_position: Vector2) -> void:
+	_spawn_magnet_pickup(spawn_position, true)
+
+
+func _spawn_magnet_pickup(spawn_position: Vector2, full_magnet: bool) -> void:
+	if game_over or MAGNET_PICKUP_SCENE == null:
+		return
+	var pickup := MAGNET_PICKUP_SCENE.instantiate()
+	gem_container.add_child(pickup)
+	var mode := 1 if full_magnet else 0
+	var radius := 999999.0 if full_magnet else small_magnet_collect_radius
+	if pickup.has_method("setup"):
+		pickup.setup(_clamp_to_world_bounds(spawn_position), mode, radius)
+	else:
+		var pickup_node := pickup as Node2D
+		if pickup_node != null:
+			pickup_node.global_position = _clamp_to_world_bounds(spawn_position)
+
+
+func _activate_magnet_pickup(mode: int, pickup_position: Vector2, collect_radius: float) -> void:
+	if player == null:
+		return
+	var collect_all := mode == 1
+	for child in gem_container.get_children():
+		var gem := child as ExperienceGem
+		if gem == null or not is_instance_valid(gem):
+			continue
+		if not collect_all and gem.global_position.distance_to(pickup_position) > collect_radius:
+			continue
+		if gem.has_method("magnetize_to"):
+			gem.magnetize_to(player)
 
 
 func _build_obstacles() -> void:
@@ -511,7 +575,7 @@ func _use_ultimate() -> void:
 	ultimate_overlay.visible = true
 	_position_ultimate_cutin(true)
 	_play_ultimate_sfx(ultimate_prime_sfx, -6.0, 0.98, 1.02)
-	_play_ultimate_activation_vfx(ultimate_prime_vfx_sheet, 0.78, 0.62)
+	_play_ultimate_activation_vfx(ultimate_prime_vfx_sheet, 0.78, 0.62, ultimate_prime_vfx_rotate, ultimate_prime_vfx_forward_offset)
 	get_tree().paused = true
 
 	var enter_tween := create_tween()
@@ -830,6 +894,8 @@ func _apply_selected_character_ultimate_assets() -> void:
 	ultimate_impact_sfx = _load_optional_audio(str(character.get("ultimate_impact_sfx", "")))
 	ultimate_prime_vfx_sheet = _load_optional_texture(str(character.get("ultimate_prime_vfx_sheet", "")))
 	ultimate_impact_vfx_sheet = _load_optional_texture(str(character.get("ultimate_impact_vfx_sheet", "")))
+	ultimate_prime_vfx_rotate = bool(character.get("ultimate_prime_vfx_rotate", false))
+	ultimate_prime_vfx_forward_offset = float(character.get("ultimate_prime_vfx_forward_offset", 0.0))
 
 
 func _load_optional_audio(path: String) -> AudioStream:
@@ -1623,12 +1689,12 @@ func _build_dev_upgrade_panel(parent: Control) -> void:
 	dev_upgrade_panel = PanelContainer.new()
 	dev_upgrade_panel.process_mode = Node.PROCESS_MODE_ALWAYS
 	dev_upgrade_panel.visible = false
-	dev_upgrade_panel.custom_minimum_size = Vector2(650, 124)
+	dev_upgrade_panel.custom_minimum_size = Vector2(650, 160)
 	dev_upgrade_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	dev_upgrade_panel.offset_left = 16
 	dev_upgrade_panel.offset_top = 170
 	dev_upgrade_panel.offset_right = 666
-	dev_upgrade_panel.offset_bottom = 294
+	dev_upgrade_panel.offset_bottom = 330
 	parent.add_child(dev_upgrade_panel)
 
 	var content := VBoxContainer.new()
@@ -1689,6 +1755,7 @@ func _build_dev_upgrade_panel(parent: Control) -> void:
 	dev_upgrade_status_label.custom_minimum_size = Vector2(520, 24)
 	content.add_child(dev_upgrade_status_label)
 	_build_dev_stage_jump_row(content)
+	_build_dev_dummy_row(content)
 
 
 func _build_dev_stage_jump_row(parent: VBoxContainer) -> void:
@@ -1708,6 +1775,30 @@ func _build_dev_stage_jump_row(parent: VBoxContainer) -> void:
 		button.focus_mode = Control.FOCUS_NONE
 		button.pressed.connect(_jump_to_stage.bind(stage))
 		row.add_child(button)
+
+
+func _build_dev_dummy_row(parent: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	parent.add_child(row)
+
+	var title := Label.new()
+	title.text = "Dummy"
+	title.custom_minimum_size = Vector2(96, 28)
+	row.add_child(title)
+
+	dev_dummy_button = Button.new()
+	dev_dummy_button.text = "Place Dummy"
+	dev_dummy_button.custom_minimum_size = Vector2(130, 28)
+	dev_dummy_button.focus_mode = Control.FOCUS_NONE
+	dev_dummy_button.toggle_mode = true
+	dev_dummy_button.toggled.connect(_set_dev_dummy_placement)
+	row.add_child(dev_dummy_button)
+
+	var hint := Label.new()
+	hint.text = "Left click map to spawn, right click to cancel."
+	hint.custom_minimum_size = Vector2(360, 28)
+	row.add_child(hint)
 
 
 func _refresh_dev_upgrade_options_from_button() -> void:
@@ -1858,6 +1949,91 @@ func _release_dev_upgrade_focus() -> void:
 	if dev_upgrade_selector != null:
 		dev_upgrade_selector.release_focus()
 	get_viewport().gui_release_focus()
+
+
+func _set_dev_dummy_placement(enabled: bool) -> void:
+	dev_dummy_placement_active = enabled and experiment_mode
+	if dev_dummy_button != null:
+		dev_dummy_button.set_pressed_no_signal(dev_dummy_placement_active)
+		dev_dummy_button.text = "Placing..." if dev_dummy_placement_active else "Place Dummy"
+	if dev_dummy_placement_active:
+		_ensure_dev_dummy_preview()
+		_update_dev_dummy_preview()
+	else:
+		_clear_dev_dummy_preview()
+
+
+func _ensure_dev_dummy_preview() -> void:
+	if dev_dummy_preview != null and is_instance_valid(dev_dummy_preview):
+		return
+	dev_dummy_preview = Sprite2D.new()
+	dev_dummy_preview.texture = DEV_TRAINING_DUMMY_TEXTURE
+	dev_dummy_preview.hframes = 6
+	dev_dummy_preview.vframes = 17
+	dev_dummy_preview.frame = 0
+	dev_dummy_preview.position = Vector2(0, -44)
+	dev_dummy_preview.scale = Vector2(2.45, 2.45)
+	dev_dummy_preview.modulate = Color(0.55, 1.0, 0.72, 0.58)
+	dev_dummy_preview.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	dev_dummy_preview.z_index = 180
+	add_child(dev_dummy_preview)
+
+
+func _clear_dev_dummy_preview() -> void:
+	if dev_dummy_preview != null and is_instance_valid(dev_dummy_preview):
+		dev_dummy_preview.queue_free()
+	dev_dummy_preview = null
+
+
+func _update_dev_dummy_preview() -> void:
+	if not dev_dummy_placement_active:
+		return
+	if dev_dummy_preview == null or not is_instance_valid(dev_dummy_preview):
+		return
+	dev_dummy_preview.global_position = _get_dev_dummy_mouse_position() + Vector2(0, -44)
+
+
+func _handle_dev_dummy_placement_input(event: InputEvent) -> bool:
+	if not experiment_mode or not dev_dummy_placement_active:
+		return false
+
+	var mouse_button := event as InputEventMouseButton
+	if mouse_button == null or not mouse_button.pressed:
+		return false
+
+	if mouse_button.button_index == MOUSE_BUTTON_RIGHT:
+		_set_dev_dummy_placement(false)
+		get_viewport().set_input_as_handled()
+		return true
+
+	if mouse_button.button_index != MOUSE_BUTTON_LEFT:
+		return false
+	if _is_screen_position_over_dev_panel(mouse_button.position):
+		return false
+
+	_spawn_dev_training_dummy(_get_dev_dummy_mouse_position())
+	_set_dev_dummy_placement(false)
+	get_viewport().set_input_as_handled()
+	return true
+
+
+func _get_dev_dummy_mouse_position() -> Vector2:
+	return _clamp_to_world_bounds(get_global_mouse_position())
+
+
+func _spawn_dev_training_dummy(spawn_position: Vector2) -> void:
+	if DEV_TRAINING_DUMMY_SCENE == null:
+		return
+	var dummy := DEV_TRAINING_DUMMY_SCENE.instantiate()
+	_add_enemy(dummy, spawn_position)
+	if dev_upgrade_status_label != null:
+		dev_upgrade_status_label.text = "Spawned training dummy at %d, %d." % [int(spawn_position.x), int(spawn_position.y)]
+
+
+func _is_screen_position_over_dev_panel(screen_position: Vector2) -> bool:
+	if dev_upgrade_panel != null and dev_upgrade_panel.visible:
+		return dev_upgrade_panel.get_global_rect().has_point(screen_position)
+	return false
 # DEV TEST UPGRADE TOOL END
 
 
@@ -2018,7 +2194,7 @@ func _play_ultimate_sfx(stream: AudioStream, volume_db := -6.0, min_pitch := 1.0
 	audio.finished.connect(audio.queue_free)
 
 
-func _play_ultimate_activation_vfx(texture: Texture2D, scale_amount: float, duration: float) -> void:
+func _play_ultimate_activation_vfx(texture: Texture2D, scale_amount: float, duration: float, rotate_to_direction := false, forward_offset := 0.0) -> void:
 	if texture == null or player == null or ultimate_vfx_container == null:
 		return
 
@@ -2032,7 +2208,15 @@ func _play_ultimate_activation_vfx(texture: Texture2D, scale_amount: float, dura
 	sprite.region_enabled = true
 	sprite.region_rect = Rect2(Vector2.ZERO, Vector2(256.0, 256.0))
 	sprite.centered = true
-	sprite.global_position = player.global_position + Vector2(0.0, -18.0)
+	var effect_direction := Vector2.ZERO
+	if rotate_to_direction:
+		effect_direction = player.last_attack_direction.normalized()
+		if effect_direction == Vector2.ZERO:
+			effect_direction = player.last_direction.normalized()
+		if effect_direction == Vector2.ZERO:
+			effect_direction = Vector2.DOWN
+		sprite.rotation = effect_direction.angle()
+	sprite.global_position = player.global_position + Vector2(0.0, -18.0) + effect_direction * forward_offset
 	sprite.scale = Vector2.ONE * scale_amount
 	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	sprite.material = ultimate_activation_vfx_material
@@ -2103,6 +2287,8 @@ func _update_ultimate_ui() -> void:
 
 func _set_experiment_mode(enabled: bool) -> void:
 	experiment_mode = enabled
+	if not experiment_mode:
+		_set_dev_dummy_placement(false)
 	if player != null and player.has_method("set_experiment_mode"):
 		player.set_experiment_mode(false)
 
@@ -2112,8 +2298,7 @@ func _set_experiment_mode(enabled: bool) -> void:
 		elif not game_over and not boss_spawned:
 			spawn_timer.start()
 
-	if experiment_mode:
-		_clear_experiment_threats()
+	_clear_experiment_threats()
 
 	if experiment_mode_button != null:
 		experiment_mode_button.set_pressed_no_signal(experiment_mode)
@@ -2127,6 +2312,7 @@ func _set_experiment_mode(enabled: bool) -> void:
 
 
 func _clear_experiment_threats() -> void:
+	_clear_dev_dummy_preview()
 	for child in enemy_container.get_children():
 		child.queue_free()
 	for child in projectile_container.get_children():

@@ -6,10 +6,13 @@ extends Area2D
 @export var collect_radius := 24.0
 @export var min_speed := 90.0
 @export var max_speed := 560.0
+@export var magnetized_min_speed := 420.0
+@export var magnetized_max_speed := 980.0
 
 var player: Player
 var bob_time := 0.0
 var collected := false
+var magnetized := false
 
 @onready var gem_visual: Polygon2D = $Gem
 @onready var glow_visual: Polygon2D = $Glow
@@ -41,7 +44,9 @@ func _physics_process(delta: float) -> void:
 
 	if distance <= attract_radius:
 		var pull := 1.0 - distance / attract_radius
-		var speed := lerpf(min_speed, max_speed, pull)
+		var active_min_speed := magnetized_min_speed if magnetized else min_speed
+		var active_max_speed := magnetized_max_speed if magnetized else max_speed
+		var speed := lerpf(active_min_speed, active_max_speed, pull)
 		global_position = global_position.move_toward(player.global_position, speed * delta)
 
 
@@ -59,3 +64,12 @@ func _collect() -> void:
 	if is_instance_valid(player):
 		player.add_experience(value)
 	queue_free()
+
+
+func magnetize_to(target: Node, radius := 999999.0) -> void:
+	var target_player := target as Player
+	if target_player == null:
+		return
+	player = target_player
+	attract_radius = maxf(attract_radius, radius)
+	magnetized = true

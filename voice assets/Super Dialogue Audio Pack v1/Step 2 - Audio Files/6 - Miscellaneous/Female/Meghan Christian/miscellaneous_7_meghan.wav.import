@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://chwv5fwxy1l6r"
+path="res://.godot/imported/miscellaneous_7_meghan.wav-76878bb2947b69d1556bfb0c683c5d17.sample"
+
+[deps]
+
+source_file="res://voice assets/Super Dialogue Audio Pack v1/Step 2 - Audio Files/6 - Miscellaneous/Female/Meghan Christian/miscellaneous_7_meghan.wav"
+dest_files=["res://.godot/imported/miscellaneous_7_meghan.wav-76878bb2947b69d1556bfb0c683c5d17.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

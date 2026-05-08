@@ -11,6 +11,9 @@ const DASH_SPINNING_ARRIVAL_VFX_TEXTURE := preload("res://assets/players/hunter/
 const EXECUTION_SLASH_VFX_TEXTURE := preload("res://assets/players/hunter/skills/ultimate/hunter_execution_slash_vfx_sheet.png")
 const EXECUTION_DASH_VFX_TEXTURE := preload("res://assets/players/hunter/skills/ultimate/hunter_execution_dash_vfx_sheet.png")
 const EXECUTION_SLASH_MAIN_TEXTURE := preload("res://assets/players/hunter/skills/variants/v12_sword_wave_enhanced_large.png")
+const ULTIMATE_AURA_LOOP_TEXTURE := preload("res://assets/players/hunter/skills/ultimate/hunter_ultimate_aura_loop_sheet.png")
+const ULTIMATE_BLAST_CHARGE_TEXTURE := preload("res://assets/players/hunter/skills/ultimate/hunter_ultimate_blast_charge_sheet.png")
+const ULTIMATE_BLAST_IMPACT_TEXTURE := preload("res://assets/players/hunter/skills/ultimate/hunter_ultimate_blast_impact_sheet.png")
 const DASH_SFX_PATH := "res://assets/audio/hunter/hunter_dash_clean_plasma_blade.mp3"
 const BASIC_SLASH_SFX_PATH := "res://assets/audio/hunter/hunter_basic_fast_plasma_sword.mp3"
 const BASIC_SLASH_LEVEL_2_SFX_PATH := "res://assets/audio/hunter/hunter_basic_slash_level2_rapid_bright.mp3"
@@ -132,6 +135,9 @@ var basic_slash_level_2_sfx: AudioStream
 var basic_slash_level_3_sfx_pool: Array[AudioStream] = []
 var ultimate_basic_slash_sfx_pool: Array[AudioStream] = []
 var sword_wave_sfx: AudioStream
+var ultimate_aura_sprite: Sprite2D
+var ultimate_vfx_material: CanvasItemMaterial
+var ultimate_aura_animation_time := 0.0
 
 
 func setup(owner: Node) -> void:
@@ -152,6 +158,7 @@ func combat_process(delta: float, _input_direction: Vector2) -> void:
 	guard_active_timer = maxf(0.0, guard_active_timer - delta)
 	_recharge_sword_wave(delta)
 	execution_mode_timer = maxf(0.0, execution_mode_timer - delta)
+	_update_ultimate_aura(delta)
 
 	if guard_active_timer > 0.0:
 		player.set_combat_modulate(Color(1.25, 0.72, 0.72))
@@ -186,6 +193,8 @@ func try_skill_1(input_direction: Vector2) -> void:
 	player.velocity = Vector2.ZERO
 	player.last_direction = dash_direction
 	player.set_invulnerable(dash_invulnerable_duration)
+	if player.has_method("play_mobility_voice"):
+		player.play_mobility_voice(0.1, -5.8)
 	player.update_walk_animation(dash_direction, dash_distance)
 	if not experiment_mode:
 		dash_charges = maxi(0, dash_charges - 1)
@@ -195,7 +204,7 @@ func try_skill_1(input_direction: Vector2) -> void:
 	if dash_spinning_arrival_unlocked:
 		_apply_dash_arrival_spin_damage(target_position, path_targets)
 	_spawn_dash_vfx(start_position, target_position)
-	_play_sfx(dash_sfx, -8.0, 0.98, 1.04)
+	_play_sfx(dash_sfx, -11.5, 0.98, 1.04)
 	_emit_status()
 
 
@@ -238,6 +247,8 @@ func try_skill_3(input_direction: Vector2) -> void:
 		player.lock_movement(0.1)
 	if player.has_method("play_action_animation"):
 		player.play_action_animation("attack", wave_direction, 0.12)
+	if player.has_method("try_play_attack_voice"):
+		player.try_play_attack_voice("sword_wave")
 	projectile_requested.emit(HUNTER_SWORD_WAVE_SCENE, player.global_position + wave_direction * 48.0, wave_direction, _get_modified_attack_damage(damage), params)
 	_play_sfx(sword_wave_sfx, -7.0, 0.96, 1.03)
 	player.last_attack_direction = wave_direction
@@ -305,6 +316,7 @@ func reset_upgrades() -> void:
 	execution_dash_cooldown_multiplier = 0.35
 	execution_slash_cooldown_multiplier = 0.55
 	execution_mode_timer = 0.0
+	_stop_ultimate_aura()
 	_emit_status()
 
 
@@ -312,9 +324,9 @@ func use_ultimate(context: Dictionary) -> void:
 	var center: Vector2 = context.get("origin", player.global_position)
 	execution_mode_timer = _get_execution_mode_duration()
 	ultimate_finisher_used = false
-	_spawn_ultimate_vfx(center)
+	_start_ultimate_aura()
 	if ultimate_blast_unlocked:
-		apply_area_damage(center, 360.0, 90, "ultimate")
+		_play_ultimate_blast_sequence(center)
 	_emit_status()
 
 
@@ -600,6 +612,8 @@ func _try_slash() -> void:
 			animation_duration = _get_basic_attack_cooldown(player.get_action_animation_duration("attack", animation_duration))
 		player.play_action_animation("attack", direction, animation_duration)
 
+	if player.has_method("try_play_attack_voice"):
+		player.try_play_attack_voice("basic")
 	_play_slash_sequence(direction)
 	var active_slash_cooldown := slash_cooldown * (execution_slash_cooldown_multiplier if _is_execution_mode_active() else 1.0)
 	slash_timer = 0.0 if experiment_mode else _get_basic_attack_cooldown(active_slash_cooldown)
@@ -1268,22 +1282,98 @@ func _spawn_guard_block_vfx() -> void:
 	emit_world_vfx(vfx_parent)
 
 
-func _spawn_ultimate_vfx(center: Vector2) -> void:
-	var vfx_parent := make_world_vfx_group()
-	for index in range(2):
-		var pulse := Polygon2D.new()
-		pulse.polygon = make_circle_points(46.0 + 18.0 * float(index), 40)
-		pulse.global_position = center
-		pulse.color = Color(1.0, 0.08, 0.04, 0.2 - 0.06 * float(index))
-		pulse.z_index = 24 + index
-		vfx_parent.add_child(pulse)
+func _start_ultimate_aura() -> void:
+	if player == null:
+		return
+	_stop_ultimate_aura()
+	_ensure_ultimate_vfx_material()
+	ultimate_aura_sprite = Sprite2D.new()
+	ultimate_aura_sprite.texture = ULTIMATE_AURA_LOOP_TEXTURE
+	ultimate_aura_sprite.region_enabled = true
+	ultimate_aura_sprite.region_rect = Rect2(Vector2.ZERO, Vector2(256.0, 256.0))
+	ultimate_aura_sprite.centered = true
+	ultimate_aura_sprite.position = Vector2(0.0, -34.0)
+	ultimate_aura_sprite.scale = Vector2.ONE * 1.18
+	ultimate_aura_sprite.modulate = Color(1.0, 0.88, 0.82, 0.62)
+	ultimate_aura_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	ultimate_aura_sprite.material = ultimate_vfx_material
+	ultimate_aura_sprite.z_index = 31
+	player.add_child(ultimate_aura_sprite)
+	ultimate_aura_animation_time = 0.0
 
-		var tween := create_tween()
-		tween.set_parallel(true)
-		tween.tween_property(pulse, "scale", Vector2.ONE * (2.2 + 0.45 * float(index)), 0.28 + 0.08 * float(index))
-		tween.tween_property(pulse, "color:a", 0.0, 0.28 + 0.08 * float(index))
-		tween.finished.connect(pulse.queue_free)
-	emit_world_vfx(vfx_parent, 0.7)
+
+func _stop_ultimate_aura() -> void:
+	if ultimate_aura_sprite != null and is_instance_valid(ultimate_aura_sprite):
+		ultimate_aura_sprite.queue_free()
+	ultimate_aura_sprite = null
+
+
+func _update_ultimate_aura(delta: float) -> void:
+	if not _is_execution_mode_active():
+		_stop_ultimate_aura()
+		return
+	if ultimate_aura_sprite == null or not is_instance_valid(ultimate_aura_sprite):
+		return
+	ultimate_aura_animation_time += delta
+	var frame := int(ultimate_aura_animation_time * 14.0) % 16
+	ultimate_aura_sprite.region_rect = _make_ultimate_sheet_region(ULTIMATE_AURA_LOOP_TEXTURE, frame)
+	var pulse := 0.96 + sin(ultimate_aura_animation_time * TAU * 1.45) * 0.035
+	ultimate_aura_sprite.scale = Vector2.ONE * 1.18 * pulse
+
+
+func _play_ultimate_blast_sequence(center: Vector2) -> void:
+	_spawn_ultimate_sheet_vfx(ULTIMATE_BLAST_CHARGE_TEXTURE, center, 1.25, 0.18, 84)
+	await get_tree().create_timer(0.14).timeout
+	if player == null or not is_instance_valid(player):
+		return
+	apply_area_damage(center, 360.0, 90, "ultimate")
+	_spawn_ultimate_sheet_vfx(ULTIMATE_BLAST_IMPACT_TEXTURE, center, 2.35, 0.34, 88)
+
+
+func _spawn_ultimate_sheet_vfx(texture: Texture2D, world_position: Vector2, scale_amount: float, duration: float, z_index: int) -> void:
+	if texture == null:
+		return
+	_ensure_ultimate_vfx_material()
+	var vfx_parent := make_world_vfx_group()
+	var sprite := Sprite2D.new()
+	sprite.texture = texture
+	sprite.region_enabled = true
+	sprite.region_rect = _make_ultimate_sheet_region(texture, 0)
+	sprite.centered = true
+	sprite.global_position = world_position + Vector2(0.0, -18.0)
+	sprite.scale = Vector2.ONE * scale_amount
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	sprite.material = ultimate_vfx_material
+	sprite.z_index = z_index
+	vfx_parent.add_child(sprite)
+	emit_world_vfx(vfx_parent, duration + 0.25)
+	_animate_ultimate_sheet_vfx(sprite, texture, duration)
+
+
+func _animate_ultimate_sheet_vfx(sprite: Sprite2D, texture: Texture2D, duration: float) -> void:
+	var frame_time := maxf(0.02, duration / 16.0)
+	for frame in range(16):
+		if not is_instance_valid(sprite):
+			return
+		sprite.region_rect = _make_ultimate_sheet_region(texture, frame)
+		await get_tree().create_timer(frame_time).timeout
+	if is_instance_valid(sprite):
+		sprite.queue_free()
+
+
+func _make_ultimate_sheet_region(texture: Texture2D, frame: int) -> Rect2:
+	var columns := 4
+	var frame_size := Vector2(float(texture.get_width()) / float(columns), float(texture.get_height()) / 4.0)
+	var column := frame % columns
+	var row := int(frame / columns)
+	return Rect2(Vector2(column, row) * frame_size, frame_size)
+
+
+func _ensure_ultimate_vfx_material() -> void:
+	if ultimate_vfx_material != null:
+		return
+	ultimate_vfx_material = CanvasItemMaterial.new()
+	ultimate_vfx_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 
 
 func _load_sfx() -> void:

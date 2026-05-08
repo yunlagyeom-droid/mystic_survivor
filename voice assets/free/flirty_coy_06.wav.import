@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://b5sdor4jwkmn6"
+path="res://.godot/imported/flirty_coy_06.wav-dcf3e2da8b6dde62c1679bc34f703c89.sample"
+
+[deps]
+
+source_file="res://voice assets/free/flirty_coy_06.wav"
+dest_files=["res://.godot/imported/flirty_coy_06.wav-dcf3e2da8b6dde62c1679bc34f703c89.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

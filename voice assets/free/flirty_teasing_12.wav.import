@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://brasnhbx4lrq0"
+path="res://.godot/imported/flirty_teasing_12.wav-c7b9a3a03f6f89e656e44a85a34acab8.sample"
+
+[deps]
+
+source_file="res://voice assets/free/flirty_teasing_12.wav"
+dest_files=["res://.godot/imported/flirty_teasing_12.wav-c7b9a3a03f6f89e656e44a85a34acab8.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

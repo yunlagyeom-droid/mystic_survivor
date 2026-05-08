@@ -1,0 +1,24 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/training_dummy.gd" id="training_dummy_script"]
+[ext_resource type="Texture2D" path="res://assets/_asset_store/Warrior/SpriteSheet/Warrior_SheetnoEffect.png" id="warrior_texture"]
+
+[sub_resource type="CapsuleShape2D" id="body_shape"]
+radius = 24.0
+height = 66.0
+
+[node name="TrainingDummy" type="StaticBody2D"]
+collision_layer = 2
+collision_mask = 0
+script = ExtResource("training_dummy_script")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -44)
+scale = Vector2(2.45, 2.45)
+texture = ExtResource("warrior_texture")
+hframes = 6
+vframes = 17
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -28)
+shape = SubResource("body_shape")

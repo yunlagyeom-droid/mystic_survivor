@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bkrlkiqcm7jaa"
-path="res://.godot/imported/player_mage.png-4e5ca3ef6a81501e3e6f773f2497abb6.ctex"
+uid="uid://dw7deacrxjowr"
+path="res://.godot/imported/hunter_background.png-c81a401dba20d3cc9181190ff9197a83.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/players/mage/sprites/player_mage.png"
-dest_files=["res://.godot/imported/player_mage.png-4e5ca3ef6a81501e3e6f773f2497abb6.ctex"]
+source_file="res://hunter_background.png"
+dest_files=["res://.godot/imported/hunter_background.png-c81a401dba20d3cc9181190ff9197a83.ctex"]
 
 [params]
 

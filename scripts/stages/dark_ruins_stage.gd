@@ -10,6 +10,10 @@ const CYBER_RUINS_2X2_NW_PATH := "res://assets/stages/dark_ruins/cyber_ruins_2x2
 const CYBER_RUINS_2X2_NE_PATH := "res://assets/stages/dark_ruins/cyber_ruins_2x2_ne_v1.png"
 const CYBER_RUINS_2X2_SW_PATH := "res://assets/stages/dark_ruins/cyber_ruins_2x2_sw_v1.png"
 const CYBER_RUINS_2X2_SE_PATH := "res://assets/stages/dark_ruins/cyber_ruins_2x2_se_v1.png"
+const MEADOW_ISO_2X2_NW_PATH := "res://assets/stages/isometric_meadow/meadow_iso_2x2_nw_v1.png"
+const MEADOW_ISO_2X2_NE_PATH := "res://assets/stages/isometric_meadow/meadow_iso_2x2_ne_v1.png"
+const MEADOW_ISO_2X2_SW_PATH := "res://assets/stages/isometric_meadow/meadow_iso_2x2_sw_v1.png"
+const MEADOW_ISO_2X2_SE_PATH := "res://assets/stages/isometric_meadow/meadow_iso_2x2_se_v1.png"
 const MIN_CYBER_ARENA_SIZE := Vector2(3600.0, 1400.0)
 const MIN_CYBER_2X2_ARENA_SIZE := Vector2(6000.0, 4000.0)
 
@@ -62,6 +66,9 @@ func build(background_parent: Node2D, obstacle_parent: Node2D, world_bounds: Vec
 	if obstacle_parent != null:
 		_clear_children(obstacle_parent)
 
+	if _build_four_panel_meadow_arena(background_parent, world_bounds):
+		return background_rect
+
 	if _build_four_panel_cyber_arena(background_parent, world_bounds):
 		return background_rect
 
@@ -82,10 +89,32 @@ func get_background_rect() -> Rect2:
 
 
 func _build_four_panel_cyber_arena(parent: Node2D, world_bounds: Vector2) -> bool:
-	var nw_texture := _load_stage_texture(CYBER_RUINS_2X2_NW_PATH)
-	var ne_texture := _load_stage_texture(CYBER_RUINS_2X2_NE_PATH)
-	var sw_texture := _load_stage_texture(CYBER_RUINS_2X2_SW_PATH)
-	var se_texture := _load_stage_texture(CYBER_RUINS_2X2_SE_PATH)
+	return _build_four_panel_image_arena(
+		parent,
+		world_bounds,
+		CYBER_RUINS_2X2_NW_PATH,
+		CYBER_RUINS_2X2_NE_PATH,
+		CYBER_RUINS_2X2_SW_PATH,
+		CYBER_RUINS_2X2_SE_PATH
+	)
+
+
+func _build_four_panel_meadow_arena(parent: Node2D, world_bounds: Vector2) -> bool:
+	return _build_four_panel_image_arena(
+		parent,
+		world_bounds,
+		MEADOW_ISO_2X2_NW_PATH,
+		MEADOW_ISO_2X2_NE_PATH,
+		MEADOW_ISO_2X2_SW_PATH,
+		MEADOW_ISO_2X2_SE_PATH
+	)
+
+
+func _build_four_panel_image_arena(parent: Node2D, world_bounds: Vector2, nw_path: String, ne_path: String, sw_path: String, se_path: String) -> bool:
+	var nw_texture := _load_stage_texture(nw_path)
+	var ne_texture := _load_stage_texture(ne_path)
+	var sw_texture := _load_stage_texture(sw_path)
+	var se_texture := _load_stage_texture(se_path)
 	if nw_texture == null or ne_texture == null or sw_texture == null or se_texture == null:
 		return false
 

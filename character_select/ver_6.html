@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Character Select Master Reference</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* 아크메이지(밝은 테마)를 기본값으로 설정 */
+            --theme-color: #5c8ae6; 
+            --theme-glow: rgba(92, 138, 230, 0.6);
+            --panel-bg: rgba(255, 255, 255, 0.65); /* 3번 이미지의 밝은 반투명 판넬 */
+            --panel-border: rgba(255, 255, 255, 0.8);
+            --text-title: #1e3a8a; /* 짙은 파란색 글씨 */
+            --text-desc: #334155; /* 어두운 회색 글씨 */
+            --stat-bg: rgba(255, 255, 255, 0.6);
+            --skill-bg: rgba(255, 255, 255, 0.8);
+            --card-bg: rgba(255, 255, 255, 0.3);
+            --card-active-bg: rgba(255, 255, 255, 0.85);
+            --transition-speed: 0.6s;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Nanum Myeongjo', serif; }
+        
+        body { 
+            background-color: #000; 
+            overflow: hidden; 
+        }
+
+        /* --- 배경 미디어 (뿌연 오버레이 제거됨) --- */
+        #video-container {
+            position: absolute;
+            width: 100%; height: 100%;
+            z-index: 0;
+        }
+        .bg-image-layer {
+            position: absolute;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            opacity: 0;
+            transition: opacity 0.8s ease-in-out;
+        }
+        .bg-image-layer.active { opacity: 1; }
+
+        /* --- 전체 UI 레이어 --- */
+        #ui-wrapper {
+            position: relative;
+            z-index: 10;
+            width: 100vw; height: 100vh;
+            padding: 60px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+        .clickable { pointer-events: auto; }
+
+        /* 공통 패널 스타일: 캐릭터에 따라 색상이 동적으로 바뀜 */
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px); /* 블러를 살짝 낮춰 맑은 느낌 유지 */
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 24px;
+            border: 1px solid var(--panel-border);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+            transition: background var(--transition-speed), border var(--transition-speed);
+        }
+
+        /* --- 좌측 정보 패널 --- */
+        .info-panel {
+            width: 400px;
+            padding: 40px;
+            height: fit-content;
+        }
+        .info-content.fade-out { opacity: 0; transform: translateY(10px); }
+        .info-content { transition: all 0.4s ease; }
+
+        .char-title { 
+            font-size: 38px; 
+            font-weight: 800; 
+            margin-bottom: 8px; 
+            color: var(--text-title);
+            transition: color var(--transition-speed);
+        }
+        .char-tag { 
+            font-size: 14px; 
+            font-weight: 700; 
+            margin-bottom: 24px; 
+            transition: color var(--transition-speed); 
+        }
+        .char-desc { 
+            font-size: 14px; 
+            line-height: 1.7; 
+            color: var(--text-desc); 
+            margin-bottom: 35px; 
+            word-break: keep-all; 
+            transition: color var(--transition-speed);
+        }
+
+        /* 스킬 레이아웃 (3, 4번 이미지 참고하여 단순화 및 원형 퀄리티 업) */
+        .skill-section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-desc);
+            margin-bottom: 10px;
+        }
+        .skills-grid { display: flex; gap: 15px; margin-bottom: 40px; }
+        .skill-slot { 
+            width: 50px; height: 50px; 
+            background: var(--skill-bg); 
+            border-radius: 50%; 
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all var(--transition-speed);
+        }
+        .skill-slot:hover { transform: scale(1.1); filter: brightness(1.2); }
+
+        /* 스탯 레이아웃 */
+        .stat-row { margin-bottom: 16px; }
+        .stat-label { 
+            display: flex; 
+            justify-content: space-between; 
+            font-size: 13px; 
+            font-weight: 800; 
+            margin-bottom: 6px;
+            color: var(--text-desc);
+        }
+        .stat-bar-bg { 
+            width: 100%; height: 6px; 
+            background: var(--stat-bg); 
+            border-radius: 10px; 
+            overflow: hidden; 
+            transition: background var(--transition-speed);
+        }
+        .stat-bar-fill { 
+            width: 0%; height: 100%; 
+            background: var(--theme-color); 
+            transition: width 1s cubic-bezier(0.22, 1, 0.36, 1), background var(--transition-speed); 
+        }
+
+        /* --- 우측 리스트 패널 --- */
+        .list-panel {
+            width: 320px;
+            max-height: fit-content;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            /* 배경을 투명하게 해서 개별 카드만 보이게 할 수도 있고, 판넬 느낌을 유지할 수도 있습니다. */
+            background: transparent; 
+            border: none;
+            box-shadow: none;
+            backdrop-filter: none;
+        }
+
+        .char-card {
+            display: flex;
+            align-items: center;
+            padding: 16px 20px;
+            border-radius: 16px;
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            border: 1px solid var(--panel-border);
+            color: var(--text-desc);
+            transition: all var(--transition-speed);
+        }
+        .char-card:hover { transform: translateX(-5px); background: var(--card-active-bg); }
+        .char-card.active { 
+            background: var(--card-active-bg); 
+            border-color: var(--theme-color);
+            color: var(--text-title);
+            transform: translateX(-10px);
+        }
+
+        .card-name { font-weight: 800; font-size: 16px; }
+        .card-tag { font-size: 12px; font-weight: 700; opacity: 0.8; margin-top: 2px; }
+
+        /* 잠긴 캐릭터 스타일 */
+        .locked { opacity: 0.5; cursor: default; }
+        .locked:hover { transform: none; background: var(--card-bg); }
+
+        /* --- 하단 버튼 (Glow Effect 유지) --- */
+        .bottom-area {
+            position: absolute;
+            bottom: 60px; left: 0; width: 100%;
+            display: flex; justify-content: center;
+            pointer-events: none;
+        }
+        .btn-main {
+            padding: 16px 70px;
+            border-radius: 40px;
+            border: 1px solid var(--panel-border);
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            color: var(--text-title);
+            font-size: 18px;
+            font-weight: 800;
+            cursor: pointer;
+            pointer-events: auto;
+            box-shadow: 0 0 10px var(--theme-glow), 
+                        0 0 20px var(--theme-glow);
+            transition: all var(--transition-speed);
+        }
+        .btn-main:hover { 
+            transform: scale(1.05); 
+            color: #fff;
+            background: var(--theme-color);
+            box-shadow: 0 0 20px var(--theme-glow), 
+                        0 0 40px var(--theme-color);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="video-container">
+        <video id="bg-1" class="active bg-image-layer" autoplay loop muted></video>
+        <video id="bg-2" class="bg-image-layer" autoplay loop muted></video>
+    </div>
+
+    <div id="ui-wrapper">
+        <div class="panel info-panel clickable">
+            <div class="info-content" id="info-content">
+                <h1 class="char-title" id="display-name">아크메이지</h1>
+                <p class="char-tag" id="display-tag">🔥 불, 독</p>
+                <p class="char-desc" id="display-desc">데이터 로딩 중...</p>
+
+                <div class="skill-section-title">✦ 스킬</div>
+                <div class="skills-grid">
+                    <div class="skill-slot"></div>
+                    <div class="skill-slot"></div>
+                    <div class="skill-slot"></div>
+                    <div class="skill-slot"></div>
+                </div>
+
+                <div class="stats-area">
+                    <div class="stat-row">
+                        <div class="stat-label"><span>공격력</span><span id="val-atk"></span></div>
+                        <div class="stat-bar-bg"><div id="bar-atk" class="stat-bar-fill"></div></div>
+                    </div>
+                    <div class="stat-row">
+                        <div class="stat-label"><span>기동력</span><span id="val-mob"></span></div>
+                        <div class="stat-bar-bg"><div id="bar-mob" class="stat-bar-fill"></div></div>
+                    </div>
+                    <div class="stat-row">
+                        <div class="stat-label"><span>방어력</span><span id="val-def"></span></div>
+                        <div class="stat-bar-bg"><div id="bar-def" class="stat-bar-fill"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="list-panel clickable" id="char-list">
+            </div>
+
+        <div class="bottom-area">
+            <button class="btn-main">선택하기</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. 캐릭터별 테마 데이터 설정 ---
+        const charData = {
+            mage: {
+                name: "아크메이지",
+                tag: "🔥 불, 독",
+                desc: "모든 것을 불태우는 불 마법과 적을 중독시키는 독 마법을 사용하는 마법사입니다. 강력한 광역 공격과 상태 이상으로 전장을 지배합니다.",
+                bgSrc: "mage_final.mov", // 배경 영상 또는 이미지 경로
+                stats: { atk: 92, mob: 40, def: 60 },
+                // 3번 이미지(밝은 톤) 테마 적용
+                theme: {
+                    '--theme-color': '#5c8ae6',
+                    '--theme-glow': 'rgba(92, 138, 230, 0.4)',
+                    '--panel-bg': 'rgba(255, 255, 255, 0.65)',
+                    '--panel-border': 'rgba(255, 255, 255, 0.8)',
+                    '--text-title': '#1e3a8a',
+                    '--text-desc': '#334155',
+                    '--stat-bg': 'rgba(255, 255, 255, 0.7)',
+                    '--skill-bg': 'rgba(255, 255, 255, 0.8)',
+                    '--card-bg': 'rgba(255, 255, 255, 0.4)',
+                    '--card-active-bg': 'rgba(255, 255, 255, 0.9)'
+                }
+            },
+            hunter: {
+                name: "헌터",
+                tag: "🌙 암흑, 연계",
+                desc: "빠른 검술로 적을 추적하는 근접형 헌터입니다. 적에게 표식을 남기고 연속 공격을 이어가며, 순식간에 치명적인 피해를 입힙니다.",
+                bgSrc: "hunter_realfinal_live2d.mov",
+                stats: { atk: 98, mob: 82, def: 40 },
+                // 4번 이미지(어두운 톤) 테마 적용
+                theme: {
+                    '--theme-color': '#ef4444',
+                    '--theme-glow': 'rgba(239, 68, 68, 0.5)',
+                    '--panel-bg': 'rgba(20, 10, 10, 0.8)',
+                    '--panel-border': 'rgba(239, 68, 68, 0.3)',
+                    '--text-title': '#ef4444',
+                    '--text-desc': '#e2e8f0',
+                    '--stat-bg': 'rgba(255, 255, 255, 0.2)',
+                    '--skill-bg': 'rgba(226, 232, 240, 0.9)',
+                    '--card-bg': 'rgba(30, 20, 20, 0.6)',
+                    '--card-active-bg': 'rgba(100, 20, 20, 0.85)'
+                }
+            },
+            // 미구현 캐릭터
+            paladin: { name: "???", tag: "추가 예정", locked: true },
+            rogue: { name: "???", tag: "추가 예정", locked: true },
+            archer: { name: "???", tag: "추가 예정", locked: true }
+        };
+
+        let currentActiveBg = 1;
+
+        // --- 2. 초기화 함수 ---
+        function init() {
+            const listContainer = document.getElementById('char-list');
+            
+            Object.keys(charData).forEach(key => {
+                const char = charData[key];
+                const card = document.createElement('div');
+                card.className = `char-card ${char.locked ? 'locked' : ''}`;
+                card.id = `card-${key}`;
+                card.innerHTML = `
+                    <div>
+                        <div class="card-name">${char.name}</div>
+                        ${char.locked ? '' : `<div class="card-tag">${char.tag}</div>`}
+                    </div>
+                `;
+                if(!char.locked) card.onclick = () => selectCharacter(key);
+                listContainer.appendChild(card);
+            });
+
+            selectCharacter('mage'); // 처음 로드 시 아크메이지 선택
+        }
+
+        // --- 3. 핵심 기능: 캐릭터 선택 및 테마/배경 전환 ---
+        function selectCharacter(key) {
+            const data = charData[key];
+            if(!data || data.locked) return;
+
+            // [A] CSS 변수 동적 업데이트 (밝은 테마 ↔ 어두운 테마)
+            if (data.theme) {
+                Object.entries(data.theme).forEach(([cssVar, value]) => {
+                    document.documentElement.style.setProperty(cssVar, value);
+                });
+            }
+
+            // 우측 리스트 활성화 표시
+            document.querySelectorAll('.char-card').forEach(c => c.classList.remove('active'));
+            document.getElementById(`card-${key}`).classList.add('active');
+
+            // [B] 정보 패널 텍스트 페이드 아웃
+            const content = document.getElementById('info-content');
+            content.classList.add('fade-out');
+
+            // [C] 배경 이미지/영상 크로스페이드
+            if (data.bgSrc) {
+                crossfadeBackground(data.bgSrc);
+            }
+
+            // [D] 텍스트 및 스탯 업데이트 후 페이드 인
+            setTimeout(() => {
+                document.getElementById('display-name').innerText = data.name;
+                document.getElementById('display-tag').innerText = data.tag;
+                document.getElementById('display-desc').innerText = data.desc;
+
+                updateStats(data.stats);
+
+                content.classList.remove('fade-out');
+            }, 400);
+        }
+
+        function crossfadeBackground(src) {
+            const nextBgNum = currentActiveBg === 1 ? 2 : 1;
+            const currentBg = document.getElementById(`bg-${currentActiveBg}`);
+            const nextBg = document.getElementById(`bg-${nextBgNum}`);
+
+            nextBg.src = src;
+            nextBg.onloadeddata = () => {
+                nextBg.classList.add('active');
+                currentBg.classList.remove('active');
+                currentActiveBg = nextBgNum;
+            };
+        }
+
+        function updateStats(stats) {
+            const keys = ['atk', 'mob', 'def'];
+            keys.forEach(k => {
+                const bar = document.getElementById(`bar-${k}`);
+                bar.style.width = stats[k] + '%';
+            });
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

@@ -8,6 +8,8 @@ const LEFT_PANEL_WIDTH := 870.0
 const DETAIL_PANEL_WIDTH := 900.0
 const DETAIL_INFO_TOP := 64.0
 const DETAIL_INFO_BOTTOM := 112.0
+const DETAIL_VIDEO_MARGIN := 28.0
+const DETAIL_VIDEO_GAP := 28.0
 
 var characters: Array = []
 var selected_index := 0
@@ -17,6 +19,7 @@ var card_symbol_controls: Array = []
 var card_frame_overlays: Array = []
 var background_image
 var fade_layer
+var detail_animation_player
 var card_scroll: ScrollContainer
 var detail_panel: Control
 var detail_frame
@@ -24,6 +27,7 @@ var detail_info_panel: PanelContainer
 var detail_name_label: Label
 var detail_subtitle_label: Label
 var detail_concept_label: Label
+var skill_scroll: ScrollContainer
 var skill_list: VBoxContainer
 var select_button: Button
 
@@ -89,6 +93,80 @@ class FocusedTexture:
 		source_position.y = clampf(source_position.y, 0.0, maxf(0.0, texture_size.y - source_size.y))
 
 		draw_texture_rect_region(texture, Rect2(Vector2.ZERO, size), Rect2(source_position, source_size), tint)
+
+
+class SheetAnimation:
+	extends Control
+
+	var texture: Texture2D
+	var columns := 1
+	var rows := 1
+	var fps := 12.0
+	var display_mode := "cover"
+	var focus := Vector2(0.5, 0.5)
+	var elapsed := 0.0
+	var frame_index := 0
+
+
+	func set_animation_data(new_texture: Texture2D, new_columns: int, new_rows: int, new_fps: float, new_display_mode: String, new_focus: Vector2) -> void:
+		texture = new_texture
+		columns = maxi(1, new_columns)
+		rows = maxi(1, new_rows)
+		fps = maxf(1.0, new_fps)
+		display_mode = new_display_mode
+		focus = new_focus
+		elapsed = 0.0
+		frame_index = 0
+		visible = texture != null
+		set_process(visible)
+		queue_redraw()
+
+
+	func clear_animation() -> void:
+		texture = null
+		visible = false
+		set_process(false)
+		queue_redraw()
+
+
+	func _process(delta: float) -> void:
+		if texture == null:
+			return
+
+		elapsed += delta
+		var total_frames := columns * rows
+		frame_index = int(elapsed * fps) % total_frames
+		queue_redraw()
+
+
+	func _draw() -> void:
+		if texture == null or size.x <= 0.0 or size.y <= 0.0:
+			return
+
+		var sheet_size := texture.get_size()
+		var frame_size := Vector2(sheet_size.x / float(columns), sheet_size.y / float(rows))
+		if frame_size.x <= 0.0 or frame_size.y <= 0.0:
+			return
+
+		var frame_column := frame_index % columns
+		var frame_row := frame_index / columns
+		var source_rect := Rect2(Vector2(frame_size.x * frame_column, frame_size.y * frame_row), frame_size)
+		var target_rect := _get_target_rect(frame_size)
+		draw_texture_rect_region(texture, target_rect, source_rect)
+
+
+	func _get_target_rect(frame_size: Vector2) -> Rect2:
+		var scale := minf(size.x / frame_size.x, size.y / frame_size.y)
+		if display_mode != "contain":
+			scale = maxf(size.x / frame_size.x, size.y / frame_size.y)
+
+		var draw_size := frame_size * scale
+		var spare := size - draw_size
+		var draw_position := Vector2(
+			spare.x * clampf(focus.x, 0.0, 1.0),
+			spare.y * clampf(focus.y, 0.0, 1.0)
+		)
+		return Rect2(draw_position, draw_size)
 
 
 class ShowcaseFade:
@@ -569,10 +647,16 @@ func _build_card_area(parent: Control) -> void:
 
 func _build_detail_area(parent: Control) -> void:
 	detail_panel = Control.new()
+	detail_panel.clip_contents = true
 	detail_panel.custom_minimum_size = Vector2(DETAIL_PANEL_WIDTH, 0)
 	detail_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	parent.add_child(detail_panel)
+
+	detail_animation_player = SheetAnimation.new()
+	detail_animation_player.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	detail_animation_player.visible = false
+	detail_panel.add_child(detail_animation_player)
 
 	detail_frame = ShowcasePanelFrame.new()
 	detail_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -608,7 +692,7 @@ func _build_detail_area(parent: Control) -> void:
 	info_column.add_child(_make_separator())
 
 	var concept_title := Label.new()
-	concept_title.text = "컨셉"
+	concept_title.text = "캐릭터 정보"
 	concept_title.add_theme_font_size_override("font_size", 25)
 	concept_title.add_theme_color_override("font_color", Color(0.92, 0.72, 0.46))
 	info_column.add_child(concept_title)
@@ -627,9 +711,16 @@ func _build_detail_area(parent: Control) -> void:
 	skill_title.add_theme_color_override("font_color", Color(0.92, 0.72, 0.46))
 	info_column.add_child(skill_title)
 
+	skill_scroll = ScrollContainer.new()
+	skill_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	skill_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	skill_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	info_column.add_child(skill_scroll)
+
 	skill_list = VBoxContainer.new()
+	skill_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	skill_list.add_theme_constant_override("separation", 9)
-	info_column.add_child(skill_list)
+	skill_scroll.add_child(skill_list)
 
 	select_button = Button.new()
 	select_button.text = "선택하기"
@@ -782,6 +873,8 @@ func _update_selection() -> void:
 
 	var info_side: String = character.get("info_side", "left")
 	_position_detail_info_panel(info_side, character.get("info_width", 520.0))
+	_position_detail_animation(info_side, character.get("info_width", 520.0))
+	_update_detail_animation(character)
 	call_deferred("_sync_fade_layer", theme_color, accent_color, info_side)
 
 	detail_name_label.text = character["name"]
@@ -812,6 +905,51 @@ func _position_detail_info_panel(side: String, panel_width: float) -> void:
 		detail_info_panel.anchor_right = 0.0
 		detail_info_panel.offset_left = 22.0
 		detail_info_panel.offset_right = panel_width + 22.0
+
+
+func _position_detail_animation(side: String, panel_width: float) -> void:
+	if detail_animation_player == null:
+		return
+
+	detail_animation_player.anchor_top = 0.0
+	detail_animation_player.anchor_bottom = 1.0
+	detail_animation_player.offset_top = DETAIL_VIDEO_MARGIN
+	detail_animation_player.offset_bottom = -DETAIL_VIDEO_MARGIN
+
+	if side == "right":
+		detail_animation_player.anchor_left = 0.0
+		detail_animation_player.anchor_right = 1.0
+		detail_animation_player.offset_left = DETAIL_VIDEO_MARGIN
+		detail_animation_player.offset_right = -panel_width - DETAIL_VIDEO_GAP
+	else:
+		detail_animation_player.anchor_left = 0.0
+		detail_animation_player.anchor_right = 1.0
+		detail_animation_player.offset_left = panel_width + DETAIL_VIDEO_GAP
+		detail_animation_player.offset_right = -DETAIL_VIDEO_MARGIN
+
+
+func _update_detail_animation(character: Dictionary) -> void:
+	if detail_animation_player == null:
+		return
+
+	var sheet_path: String = character.get("select_animation_sheet", "")
+	if sheet_path.is_empty():
+		detail_animation_player.clear_animation()
+		return
+
+	var texture := _load_texture(sheet_path)
+	if texture == null:
+		detail_animation_player.clear_animation()
+		return
+
+	detail_animation_player.set_animation_data(
+		texture,
+		int(character.get("select_animation_columns", 4)),
+		int(character.get("select_animation_rows", 6)),
+		float(character.get("select_animation_fps", 12.0)),
+		character.get("select_animation_mode", "cover"),
+		character.get("select_animation_focus", Vector2(0.5, 0.5))
+	)
 
 
 func _sync_fade_layer(theme_color: Color, accent_color: Color, info_side: String) -> void:

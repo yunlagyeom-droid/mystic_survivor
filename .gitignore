@@ -1,3 +1,10 @@
 .godot/
 export_presets.cfg
 tmp/godot_sandbox/
+
+# Local/generated test artifacts
+tmp/
+
+# Character select frame dumps are source material for rebuilding sheets,
+# not runtime assets that should be committed frame-by-frame.
+character_select/frames/

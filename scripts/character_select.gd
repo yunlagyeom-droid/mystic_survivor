@@ -2,34 +2,48 @@ extends Control
 
 const Catalog := preload("res://scripts/character_catalog.gd")
 
-const CARD_SIZE := Vector2(162.0, 690.0)
-const CARD_GAP := 15
-const LEFT_PANEL_WIDTH := 870.0
-const DETAIL_PANEL_WIDTH := 900.0
-const DETAIL_INFO_TOP := 64.0
-const DETAIL_INFO_BOTTOM := 112.0
-const DETAIL_VIDEO_MARGIN := 28.0
-const DETAIL_VIDEO_GAP := 28.0
+const SELECT_MUSIC_PATH := "res://assets/audio/music/character_select_1.mp3"
+const SELECTABLE_IDS := ["mage", "hunter"]
+const LOCKED_SLOTS := [
+	{"name": "???", "tag": "추가 예정", "shape": "star", "color": Color(0.72, 0.76, 0.86), "image": "res://assets/ui/character_select/roster/locked_roster_1.png"},
+	{"name": "???", "tag": "추가 예정", "shape": "star", "color": Color(0.72, 0.76, 0.86), "image": "res://assets/ui/character_select/roster/locked_roster_2.png"},
+	{"name": "???", "tag": "추가 예정", "shape": "star", "color": Color(0.72, 0.76, 0.86), "image": "res://assets/ui/character_select/roster/locked_roster_3.png"},
+	{"name": "???", "tag": "추가 예정", "shape": "star", "color": Color(0.72, 0.76, 0.86), "image": "res://assets/ui/character_select/roster/locked_roster_4.png"},
+	{"name": "???", "tag": "추가 예정", "shape": "star", "color": Color(0.72, 0.76, 0.86), "image": "res://assets/ui/character_select/roster/locked_roster_5.png"},
+]
 
 var characters: Array = []
 var selected_index := 0
-var card_buttons: Array[Button] = []
-var card_name_labels: Array[Label] = []
-var card_symbol_controls: Array = []
-var card_frame_overlays: Array = []
-var background_image
-var fade_layer
-var detail_animation_player
-var card_scroll: ScrollContainer
-var detail_panel: Control
-var detail_frame
-var detail_info_panel: PanelContainer
-var detail_name_label: Label
-var detail_subtitle_label: Label
-var detail_concept_label: Label
-var skill_scroll: ScrollContainer
-var skill_list: VBoxContainer
+var active_background := 0
+
+var background_layers: Array = []
+var atmosphere_layer: AtmosphereLayer
+var live_stage: Control
+var live_animation_layers: Array = []
+var active_live_animation := 0
+var live_fallback: FocusedTexture
+var live_caption: Label
+var info_panel: PanelContainer
+var title_label: Label
+var tag_label: Label
+var desc_label: Label
+var skill_icons: Array = []
+var stat_bars: Dictionary = {}
+var stat_values: Dictionary = {}
+var stat_display_values: Dictionary = {}
+var stat_rows: Dictionary = {}
+var roster_buttons: Array[Button] = []
+var roster_frames: Array = []
+var roster_badges: Array = []
+var roster_portraits: Array = []
+var roster_name_labels: Array[Label] = []
+var roster_tag_labels: Array[Label] = []
+var roster_hovered: Array = []
 var select_button: Button
+var music_player: AudioStreamPlayer
+var music_button: Button
+var music_enabled := true
+var texture_cache: Dictionary = {}
 
 
 class FocusedTexture:
@@ -41,7 +55,6 @@ class FocusedTexture:
 	var tint := Color.WHITE
 	var overlay_color := Color.TRANSPARENT
 
-
 	func set_texture_data(new_texture: Texture2D, new_display_mode: String, new_focus: Vector2, new_tint := Color.WHITE, new_overlay_color := Color.TRANSPARENT) -> void:
 		texture = new_texture
 		display_mode = new_display_mode
@@ -49,7 +62,6 @@ class FocusedTexture:
 		tint = new_tint
 		overlay_color = new_overlay_color
 		queue_redraw()
-
 
 	func _draw() -> void:
 		if texture == null or size.x <= 0.0 or size.y <= 0.0:
@@ -67,7 +79,6 @@ class FocusedTexture:
 		if overlay_color.a > 0.0:
 			draw_rect(Rect2(Vector2.ZERO, size), overlay_color, true)
 
-
 	func _draw_contained(texture_size: Vector2) -> void:
 		var scale := minf(size.x / texture_size.x, size.y / texture_size.y)
 		var draw_size := texture_size * scale
@@ -77,7 +88,6 @@ class FocusedTexture:
 			spare.y * clampf(focus.y, 0.0, 1.0)
 		)
 		draw_texture_rect(texture, Rect2(draw_position, draw_size), false, tint)
-
 
 	func _draw_covered(texture_size: Vector2) -> void:
 		var scale := maxf(size.x / texture_size.x, size.y / texture_size.y)
@@ -91,7 +101,6 @@ class FocusedTexture:
 		)
 		source_position.x = clampf(source_position.x, 0.0, maxf(0.0, texture_size.x - source_size.x))
 		source_position.y = clampf(source_position.y, 0.0, maxf(0.0, texture_size.y - source_size.y))
-
 		draw_texture_rect_region(texture, Rect2(Vector2.ZERO, size), Rect2(source_position, source_size), tint)
 
 
@@ -107,7 +116,6 @@ class SheetAnimation:
 	var elapsed := 0.0
 	var frame_index := 0
 
-
 	func set_animation_data(new_texture: Texture2D, new_columns: int, new_rows: int, new_fps: float, new_display_mode: String, new_focus: Vector2) -> void:
 		texture = new_texture
 		columns = maxi(1, new_columns)
@@ -121,23 +129,19 @@ class SheetAnimation:
 		set_process(visible)
 		queue_redraw()
 
-
 	func clear_animation() -> void:
 		texture = null
 		visible = false
 		set_process(false)
 		queue_redraw()
 
-
 	func _process(delta: float) -> void:
 		if texture == null:
 			return
 
 		elapsed += delta
-		var total_frames := columns * rows
-		frame_index = int(elapsed * fps) % total_frames
+		frame_index = int(elapsed * fps) % maxi(1, columns * rows)
 		queue_redraw()
-
 
 	func _draw() -> void:
 		if texture == null or size.x <= 0.0 or size.y <= 0.0:
@@ -150,10 +154,12 @@ class SheetAnimation:
 
 		var frame_column := frame_index % columns
 		var frame_row := frame_index / columns
-		var source_rect := Rect2(Vector2(frame_size.x * frame_column, frame_size.y * frame_row), frame_size)
+		var source_rect := Rect2(
+			Vector2(frame_size.x * frame_column + 0.5, frame_size.y * frame_row + 0.5),
+			frame_size - Vector2(1.0, 1.0)
+		)
 		var target_rect := _get_target_rect(frame_size)
 		draw_texture_rect_region(texture, target_rect, source_rect)
-
 
 	func _get_target_rect(frame_size: Vector2) -> Rect2:
 		var scale := minf(size.x / frame_size.x, size.y / frame_size.y)
@@ -162,181 +168,35 @@ class SheetAnimation:
 
 		var draw_size := frame_size * scale
 		var spare := size - draw_size
-		var draw_position := Vector2(
-			spare.x * clampf(focus.x, 0.0, 1.0),
-			spare.y * clampf(focus.y, 0.0, 1.0)
+		return Rect2(
+			Vector2(
+				spare.x * clampf(focus.x, 0.0, 1.0),
+				spare.y * clampf(focus.y, 0.0, 1.0)
+			).round(),
+			draw_size.round()
 		)
-		return Rect2(draw_position, draw_size)
 
 
-class ShowcaseFade:
+class AtmosphereLayer:
 	extends Control
 
 	var theme_color := Color(0.48, 0.68, 1.0)
 	var accent_color := Color(1.0, 0.78, 0.34)
-	var info_rect := Rect2()
-	var info_side := "left"
-
-
-	func set_fade_data(new_theme_color: Color, new_accent_color: Color, new_info_rect: Rect2, new_info_side: String) -> void:
-		theme_color = new_theme_color
-		accent_color = new_accent_color
-		info_rect = new_info_rect
-		info_side = new_info_side
-		queue_redraw()
-
-
-	func _draw() -> void:
-		if size.x <= 0.0 or size.y <= 0.0:
-			return
-
-		var full_rect := Rect2(Vector2.ZERO, size)
-		draw_rect(full_rect, Color(0.0, 0.0, 0.0, 0.12), true)
-		_draw_horizontal_gradient(Rect2(0.0, 0.0, size.x * 0.56, size.y), Color.BLACK, 0.66, 0.18, 44)
-		_draw_vertical_gradient(Rect2(0.0, 0.0, size.x, size.y * 0.22), Color.BLACK, 0.56, 0.0, 24)
-		_draw_vertical_gradient(Rect2(0.0, size.y * 0.76, size.x, size.y * 0.24), Color.BLACK, 0.0, 0.58, 24)
-
-		if info_rect.size.x > 0.0 and info_rect.size.y > 0.0:
-			var safe_rect := info_rect.grow_individual(84.0, 52.0, 132.0, 58.0)
-			if info_side == "right":
-				_draw_horizontal_gradient(safe_rect, Color.BLACK, 0.08, 0.76, 44)
-			else:
-				_draw_horizontal_gradient(safe_rect, Color.BLACK, 0.76, 0.08, 44)
-			draw_rect(info_rect.grow(18.0), Color(0.0, 0.0, 0.0, 0.16), true)
-			_draw_info_frame(info_rect, accent_color)
-
-		draw_rect(full_rect.grow(-6.0), Color(0.82, 0.62, 0.34, 0.5), false, 1.0)
-		draw_rect(full_rect.grow(-14.0), Color(0.82, 0.62, 0.34, 0.2), false, 1.0)
-		_draw_title_ornaments()
-		_draw_hint_ornaments()
-		_draw_corner_ornaments()
-
-
-	func _draw_horizontal_gradient(rect: Rect2, color: Color, left_alpha: float, right_alpha: float, steps: int) -> void:
-		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
-			return
-
-		var strip_width := rect.size.x / float(steps)
-		for index in range(steps):
-			var t := float(index) / float(maxi(steps - 1, 1))
-			var alpha := lerpf(left_alpha, right_alpha, t)
-			var strip_rect := Rect2(
-				Vector2(rect.position.x + strip_width * float(index), rect.position.y),
-				Vector2(ceilf(strip_width) + 1.0, rect.size.y)
-			)
-			draw_rect(strip_rect, Color(color.r, color.g, color.b, alpha), true)
-
-
-	func _draw_vertical_gradient(rect: Rect2, color: Color, top_alpha: float, bottom_alpha: float, steps: int) -> void:
-		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
-			return
-
-		var strip_height := rect.size.y / float(steps)
-		for index in range(steps):
-			var t := float(index) / float(maxi(steps - 1, 1))
-			var alpha := lerpf(top_alpha, bottom_alpha, t)
-			var strip_rect := Rect2(
-				Vector2(rect.position.x, rect.position.y + strip_height * float(index)),
-				Vector2(rect.size.x, ceilf(strip_height) + 1.0)
-			)
-			draw_rect(strip_rect, Color(color.r, color.g, color.b, alpha), true)
-
-
-	func _draw_info_frame(rect: Rect2, color: Color) -> void:
-		var frame_rect := rect.grow(4.0)
-		draw_rect(frame_rect, Color(color.r, color.g, color.b, 0.36), false, 1.0)
-		draw_rect(frame_rect.grow(-7.0), Color(0.84, 0.66, 0.38, 0.18), false, 1.0)
-
-		var corner := 34.0
-		var width := 2.0
-		var corner_color := Color(color.r, color.g, color.b, 0.72)
-		_draw_corner(frame_rect.position, Vector2.RIGHT, Vector2.DOWN, corner, corner_color, width)
-		_draw_corner(Vector2(frame_rect.end.x, frame_rect.position.y), Vector2.LEFT, Vector2.DOWN, corner, corner_color, width)
-		_draw_corner(Vector2(frame_rect.position.x, frame_rect.end.y), Vector2.RIGHT, Vector2.UP, corner, corner_color, width)
-		_draw_corner(frame_rect.end, Vector2.LEFT, Vector2.UP, corner, corner_color, width)
-
-
-	func _draw_title_ornaments() -> void:
-		var y := 102.0
-		var half_gap := 150.0
-		var line_len := 210.0
-		var center_x := size.x * 0.5
-		var color := Color(0.84, 0.66, 0.38, 0.42)
-		draw_line(Vector2(center_x - half_gap - line_len, y), Vector2(center_x - half_gap, y), color, 1.0)
-		draw_line(Vector2(center_x + half_gap, y), Vector2(center_x + half_gap + line_len, y), color, 1.0)
-		draw_circle(Vector2(center_x - half_gap - 18.0, y), 3.0, Color(0.84, 0.66, 0.38, 0.42))
-		draw_circle(Vector2(center_x + half_gap + 18.0, y), 3.0, Color(0.84, 0.66, 0.38, 0.42))
-		draw_line(Vector2(center_x - 26.0, y + 18.0), Vector2(center_x, y + 34.0), color, 1.0)
-		draw_line(Vector2(center_x, y + 34.0), Vector2(center_x + 26.0, y + 18.0), color, 1.0)
-
-
-	func _draw_hint_ornaments() -> void:
-		var y := size.y - 56.0
-		var center_x := size.x * 0.25
-		var color := Color(0.84, 0.66, 0.38, 0.34)
-		draw_line(Vector2(center_x - 250.0, y), Vector2(center_x - 118.0, y), color, 1.0)
-		draw_line(Vector2(center_x + 118.0, y), Vector2(center_x + 250.0, y), color, 1.0)
-		draw_circle(Vector2(center_x - 104.0, y), 3.0, color)
-		draw_circle(Vector2(center_x + 104.0, y), 3.0, color)
-
-
-	func _draw_corner_ornaments() -> void:
-		var inset := 26.0
-		var length := 58.0
-		var color := Color(0.84, 0.66, 0.38, 0.38)
-		_draw_corner(Vector2(inset, inset), Vector2.RIGHT, Vector2.DOWN, length, color, 1.0)
-		_draw_corner(Vector2(size.x - inset, inset), Vector2.LEFT, Vector2.DOWN, length, color, 1.0)
-		_draw_corner(Vector2(inset, size.y - inset), Vector2.RIGHT, Vector2.UP, length, color, 1.0)
-		_draw_corner(Vector2(size.x - inset, size.y - inset), Vector2.LEFT, Vector2.UP, length, color, 1.0)
-
-
-	func _draw_corner(origin: Vector2, horizontal: Vector2, vertical: Vector2, length: float, color: Color, width: float) -> void:
-		draw_line(origin, origin + horizontal * length, color, width)
-		draw_line(origin, origin + vertical * length, color, width)
-
-
-class ShowcasePanelFrame:
-	extends Control
-
-	var theme_color := Color(0.48, 0.68, 1.0)
-	var accent_color := Color(1.0, 0.78, 0.34)
-
 
 	func set_colors(new_theme_color: Color, new_accent_color: Color) -> void:
 		theme_color = new_theme_color
 		accent_color = new_accent_color
 		queue_redraw()
 
-
 	func _draw() -> void:
-		if size.x <= 0.0 or size.y <= 0.0:
-			return
+		return
 
-		var rect := Rect2(Vector2(8.0, 10.0), size - Vector2(16.0, 20.0))
-		draw_rect(rect, Color(0.0, 0.0, 0.0, 0.08), true)
-		draw_rect(rect, Color(theme_color.r, theme_color.g, theme_color.b, 0.34), false, 1.0)
-		draw_rect(rect.grow(-8.0), Color(0.84, 0.66, 0.38, 0.16), false, 1.0)
-
-		var corner := 44.0
-		var corner_color := Color(accent_color.r, accent_color.g, accent_color.b, 0.42)
-		_draw_corner(rect.position, Vector2.RIGHT, Vector2.DOWN, corner, corner_color)
-		_draw_corner(Vector2(rect.end.x, rect.position.y), Vector2.LEFT, Vector2.DOWN, corner, corner_color)
-		_draw_corner(Vector2(rect.position.x, rect.end.y), Vector2.RIGHT, Vector2.UP, corner, corner_color)
-		_draw_corner(rect.end, Vector2.LEFT, Vector2.UP, corner, corner_color)
-
-
-	func _draw_corner(origin: Vector2, horizontal: Vector2, vertical: Vector2, length: float, color: Color) -> void:
-		draw_line(origin, origin + horizontal * length, color, 1.0)
-		draw_line(origin, origin + vertical * length, color, 1.0)
-
-
-class CardFrameOverlay:
+class OutlineFrame:
 	extends Control
 
-	var accent_color := Color(1.0, 0.78, 0.34)
+	var accent_color := Color(0.56, 0.46, 1.0)
 	var selected := false
 	var locked := false
-
 
 	func set_state(new_accent_color: Color, new_selected: bool, new_locked := false) -> void:
 		accent_color = new_accent_color
@@ -344,128 +204,22 @@ class CardFrameOverlay:
 		locked = new_locked
 		queue_redraw()
 
-
 	func _draw() -> void:
-		if size.x <= 0.0 or size.y <= 0.0:
-			return
-
-		var rect := Rect2(Vector2(3.0, 3.0), size - Vector2(6.0, 6.0))
-		var border_alpha := 0.9 if selected else 0.36
-		var border_width := 2.0 if selected else 1.0
-
-		if selected:
-			draw_rect(rect.grow(5.0), Color(accent_color.r, accent_color.g, accent_color.b, 0.16), false, 3.0)
-			draw_rect(rect.grow(9.0), Color(accent_color.r, accent_color.g, accent_color.b, 0.08), false, 3.0)
-
-		draw_rect(rect, Color(accent_color.r, accent_color.g, accent_color.b, border_alpha), false, border_width)
-		draw_rect(rect.grow(-7.0), Color(0.94, 0.78, 0.48, 0.18 if selected else 0.08), false, 1.0)
-
-		var corner := 22.0
-		var corner_color := Color(accent_color.r, accent_color.g, accent_color.b, 0.92 if selected else 0.42)
-		_draw_corner(rect.position, Vector2.RIGHT, Vector2.DOWN, corner, corner_color, border_width)
-		_draw_corner(Vector2(rect.end.x, rect.position.y), Vector2.LEFT, Vector2.DOWN, corner, corner_color, border_width)
-		_draw_corner(Vector2(rect.position.x, rect.end.y), Vector2.RIGHT, Vector2.UP, corner, corner_color, border_width)
-		_draw_corner(rect.end, Vector2.LEFT, Vector2.UP, corner, corner_color, border_width)
-
-		if locked:
-			_draw_locked_sigil(rect)
+		return
 
 
-	func _draw_locked_sigil(rect: Rect2) -> void:
-		var center := rect.get_center()
-		var color := Color(0.84, 0.76, 0.62, 0.14)
-		draw_arc(center, 64.0, 0.0, TAU, 80, color, 1.0)
-		draw_arc(center, 42.0, 0.0, TAU, 80, color, 1.0)
-		for index in range(8):
-			var angle := TAU * float(index) / 8.0
-			var from := center + Vector2(cos(angle), sin(angle)) * 50.0
-			var to := center + Vector2(cos(angle), sin(angle)) * 68.0
-			draw_line(from, to, color, 1.0)
-
-
-	func _draw_corner(origin: Vector2, horizontal: Vector2, vertical: Vector2, length: float, color: Color, width: float) -> void:
-		draw_line(origin, origin + horizontal * length, color, width)
-		draw_line(origin, origin + vertical * length, color, width)
-
-
-class CardSymbol:
+class Emblem:
 	extends Control
 
 	var shape := "star"
-	var accent_color := Color(1.0, 0.78, 0.34)
-	var selected := false
+	var icon_color := Color(0.48, 0.68, 1.0)
+	var filled := false
 
-
-	func set_symbol_data(new_shape: String, new_accent_color: Color, new_selected: bool) -> void:
-		shape = new_shape
-		accent_color = new_accent_color
-		selected = new_selected
-		queue_redraw()
-
-
-	func _draw() -> void:
-		if size.x <= 0.0 or size.y <= 0.0:
-			return
-
-		var center := size * 0.5
-		var glow_alpha := 0.18 if selected else 0.06
-		draw_circle(center, 30.0, Color(accent_color.r, accent_color.g, accent_color.b, glow_alpha))
-		draw_arc(center, 22.0, 0.0, TAU, 72, Color(accent_color.r, accent_color.g, accent_color.b, 0.48 if selected else 0.18), 1.0)
-		_draw_shape(center, 14.0, Color(1.0, 0.88, 0.62, 1.0) if selected else Color(accent_color.r, accent_color.g, accent_color.b, 0.72), 2.0)
-
-
-	func _draw_shape(center: Vector2, radius: float, color: Color, width: float) -> void:
-		match shape:
-			"slash":
-				draw_line(center + Vector2(-radius, radius * 0.7), center + Vector2(radius, -radius * 0.7), color, width)
-				draw_line(center + Vector2(-radius * 0.45, radius), center + Vector2(radius * 0.75, -radius * 0.2), color, width)
-			"step":
-				_draw_diamond(center, radius, color, width)
-				draw_circle(center, 5.0, color)
-			"protocol":
-				draw_rect(Rect2(center - Vector2(radius * 0.65, radius * 0.65), Vector2(radius * 1.3, radius * 1.3)), color, false, width)
-				draw_rect(Rect2(center - Vector2(radius * 0.32, radius * 0.32), Vector2(radius * 0.64, radius * 0.64)), color, false, 1.0)
-			"barrier":
-				draw_arc(center, radius, 0.0, TAU, 48, color, width)
-				draw_arc(center, radius * 0.58, PI * 0.12, PI * 1.85, 40, color, width)
-			"ray":
-				for index in range(6):
-					var angle := TAU * float(index) / 6.0
-					draw_line(center + Vector2(cos(angle), sin(angle)) * 4.0, center + Vector2(cos(angle), sin(angle)) * radius, color, width)
-			_:
-				_draw_star(center, radius, color, width)
-
-
-	func _draw_star(center: Vector2, radius: float, color: Color, width: float) -> void:
-		draw_line(center + Vector2(0, -radius), center + Vector2(0, radius), color, width)
-		draw_line(center + Vector2(-radius, 0), center + Vector2(radius, 0), color, width)
-		draw_line(center + Vector2(-radius * 0.55, -radius * 0.55), center + Vector2(radius * 0.55, radius * 0.55), color, width * 0.65)
-		draw_line(center + Vector2(radius * 0.55, -radius * 0.55), center + Vector2(-radius * 0.55, radius * 0.55), color, width * 0.65)
-
-
-	func _draw_diamond(center: Vector2, radius: float, color: Color, width: float) -> void:
-		var top := center + Vector2(0.0, -radius)
-		var right := center + Vector2(radius, 0.0)
-		var bottom := center + Vector2(0.0, radius)
-		var left := center + Vector2(-radius, 0.0)
-		draw_line(top, right, color, width)
-		draw_line(right, bottom, color, width)
-		draw_line(bottom, left, color, width)
-		draw_line(left, top, color, width)
-
-
-class SkillIcon:
-	extends Control
-
-	var shape := "star"
-	var icon_color := Color(0.22, 0.62, 1.0)
-
-
-	func set_icon_data(new_shape: String, new_color: Color) -> void:
+	func set_icon_data(new_shape: String, new_color: Color, new_filled := false) -> void:
 		shape = new_shape
 		icon_color = new_color
+		filled = new_filled
 		queue_redraw()
-
 
 	func _draw() -> void:
 		if size.x <= 0.0 or size.y <= 0.0:
@@ -473,350 +227,464 @@ class SkillIcon:
 
 		var center := size * 0.5
 		var radius := minf(size.x, size.y) * 0.42
-		draw_circle(center, radius, Color(0.0, 0.0, 0.0, 0.62))
-		draw_circle(center, radius * 0.86, Color(icon_color.r, icon_color.g, icon_color.b, 0.08))
-		draw_arc(center, radius, 0.0, TAU, 80, Color(icon_color.r, icon_color.g, icon_color.b, 0.95), 2.0)
-		draw_arc(center, radius * 0.72, PI * 0.12, PI * 1.82, 60, Color(1.0, 0.92, 0.78, 0.36), 1.0)
-		_draw_symbol(center, radius * 0.43, Color(1.0, 0.95, 0.86, 1.0), 2.2)
-
+		draw_circle(center, radius, Color(icon_color.r, icon_color.g, icon_color.b, 0.16 if filled else 0.09))
+		draw_arc(center, radius, 0.0, TAU, 72, Color(icon_color.r, icon_color.g, icon_color.b, 0.9), 2.0)
 
 	func _draw_symbol(center: Vector2, radius: float, color: Color, width: float) -> void:
 		match shape:
-			"slash":
-				draw_line(center + Vector2(-radius, radius * 0.65), center + Vector2(radius, -radius * 0.65), color, width)
-				draw_line(center + Vector2(-radius * 0.35, radius), center + Vector2(radius * 0.78, -radius * 0.05), color, width * 0.85)
-			"step":
+			"slash", "guard":
+				draw_line(center + Vector2(-radius, radius * 0.7), center + Vector2(radius, -radius * 0.7), color, width)
+				draw_line(center + Vector2(-radius * 0.45, radius), center + Vector2(radius * 0.75, -radius * 0.15), color, width * 0.85)
+			"step", "diamond":
 				_draw_diamond(center, radius, color, width)
-				draw_circle(center, radius * 0.36, color)
-			"protocol":
-				draw_rect(Rect2(center - Vector2(radius * 0.72, radius * 0.72), Vector2(radius * 1.44, radius * 1.44)), color, false, width)
-				draw_rect(Rect2(center - Vector2(radius * 0.36, radius * 0.36), Vector2(radius * 0.72, radius * 0.72)), color, false, width * 0.7)
-			"barrier":
-				draw_arc(center, radius, 0.0, TAU, 60, color, width)
-				draw_arc(center, radius * 0.62, PI * 0.08, PI * 1.92, 50, color, width)
-			"ray":
+				draw_circle(center, radius * 0.26, color)
+			"protocol", "shield":
+				draw_rect(Rect2(center - Vector2(radius * 0.62, radius * 0.72), Vector2(radius * 1.24, radius * 1.44)), color, false, width)
+				draw_line(center + Vector2(-radius * 0.62, -radius * 0.08), center + Vector2(0.0, radius * 0.72), color, width)
+				draw_line(center + Vector2(radius * 0.62, -radius * 0.08), center + Vector2(0.0, radius * 0.72), color, width)
+			"ray", "flame":
 				for index in range(8):
 					var angle := TAU * float(index) / 8.0
-					var inner := center + Vector2(cos(angle), sin(angle)) * radius * 0.22
-					var outer := center + Vector2(cos(angle), sin(angle)) * radius
-					draw_line(inner, outer, color, width)
+					draw_line(center + Vector2(cos(angle), sin(angle)) * radius * 0.18, center + Vector2(cos(angle), sin(angle)) * radius, color, width)
+			"bow":
+				draw_arc(center + Vector2(-radius * 0.2, 0.0), radius, -PI * 0.5, PI * 0.5, 32, color, width)
+				draw_line(center + Vector2(-radius * 0.2, -radius), center + Vector2(-radius * 0.2, radius), color, width)
+				draw_line(center + Vector2(-radius * 0.2, 0.0), center + Vector2(radius, 0.0), color, width)
 			_:
 				draw_line(center + Vector2(0, -radius), center + Vector2(0, radius), color, width)
 				draw_line(center + Vector2(-radius, 0), center + Vector2(radius, 0), color, width)
 				draw_line(center + Vector2(-radius * 0.55, -radius * 0.55), center + Vector2(radius * 0.55, radius * 0.55), color, width * 0.65)
 				draw_line(center + Vector2(radius * 0.55, -radius * 0.55), center + Vector2(-radius * 0.55, radius * 0.55), color, width * 0.65)
 
-
 	func _draw_diamond(center: Vector2, radius: float, color: Color, width: float) -> void:
-		var top := center + Vector2(0.0, -radius)
-		var right := center + Vector2(radius, 0.0)
-		var bottom := center + Vector2(0.0, radius)
-		var left := center + Vector2(-radius, 0.0)
-		draw_line(top, right, color, width)
-		draw_line(right, bottom, color, width)
-		draw_line(bottom, left, color, width)
-		draw_line(left, top, color, width)
+		var points := PackedVector2Array([
+			center + Vector2(0.0, -radius),
+			center + Vector2(radius, 0.0),
+			center + Vector2(0.0, radius),
+			center + Vector2(-radius, 0.0),
+			center + Vector2(0.0, -radius),
+		])
+		draw_polyline(points, color, width)
 
 
 func _ready() -> void:
-	characters = Catalog.get_characters()
-	selected_index = Catalog.find_character_index(GameState.selected_character_id)
+	characters = _get_selectable_characters()
+	selected_index = _find_visible_character_index(GameState.selected_character_id)
 	_build_ui()
-	_update_selection()
-
-
-func _draw() -> void:
-	var rect := Rect2(Vector2.ZERO, size)
-	draw_rect(rect, Color(0.012, 0.018, 0.032), true)
-	draw_rect(rect.grow(-6.0), Color(0.82, 0.62, 0.34, 0.55), false, 1.0)
-	draw_rect(rect.grow(-12.0), Color(0.82, 0.62, 0.34, 0.22), false, 1.0)
-
-	for index in range(95):
-		var x := fposmod(float(index * 97), maxf(size.x, 1.0))
-		var y := fposmod(float(index * 53), maxf(size.y, 1.0))
-		var alpha := 0.06 + fposmod(float(index * 17), 40.0) / 500.0
-		draw_circle(Vector2(x, y), 1.0 + float(index % 3) * 0.3, Color(0.78, 0.85, 1.0, alpha))
+	_update_selection(false)
+	call_deferred("_preload_select_assets")
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_RESIZED:
-		queue_redraw()
-		if not characters.is_empty():
-			var character: Dictionary = characters[selected_index]
-			call_deferred("_sync_fade_layer", character["theme_color"], character["accent_color"], character.get("info_side", "left"))
+	if what == NOTIFICATION_RESIZED and not characters.is_empty():
+		_update_live_layout()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		match event.keycode:
-			KEY_LEFT, KEY_A:
-				_move_selection(-1)
-				_mark_input_as_handled()
-			KEY_RIGHT, KEY_D:
-				_move_selection(1)
-				_mark_input_as_handled()
-			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
-				_mark_input_as_handled()
-				_start_selected_character()
-	elif event is InputEventMouseButton and event.pressed:
-		match event.button_index:
-			MOUSE_BUTTON_WHEEL_UP:
-				_move_selection(-1)
-				_mark_input_as_handled()
-			MOUSE_BUTTON_WHEEL_DOWN:
-				_move_selection(1)
-				_mark_input_as_handled()
-
-
-func _mark_input_as_handled() -> void:
-	var viewport := get_viewport()
-	if viewport != null:
-		viewport.set_input_as_handled()
+	if event.is_action_pressed("move_up") or event.is_action_pressed("move_left"):
+		_move_selection(-1)
+		_mark_input_as_handled()
+	elif event.is_action_pressed("move_down") or event.is_action_pressed("move_right"):
+		_move_selection(1)
+		_mark_input_as_handled()
+	elif event.is_action_pressed("ui_accept"):
+		_start_selected_character()
+		_mark_input_as_handled()
 
 
 func _build_ui() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 
-	background_image = FocusedTexture.new()
-	background_image.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	background_image.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(background_image)
+	for index in range(2):
+		var background := FocusedTexture.new()
+		background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		background.set_anchors_preset(Control.PRESET_FULL_RECT)
+		background.modulate.a = 1.0 if index == 0 else 0.0
+		add_child(background)
+		background_layers.append(background)
 
-	fade_layer = ShowcaseFade.new()
-	fade_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	fade_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(fade_layer)
+	_build_live_stage()
 
-	var frame := MarginContainer.new()
-	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-	frame.add_theme_constant_override("margin_left", 48)
-	frame.add_theme_constant_override("margin_top", 34)
-	frame.add_theme_constant_override("margin_right", 48)
-	frame.add_theme_constant_override("margin_bottom", 40)
-	add_child(frame)
+	atmosphere_layer = AtmosphereLayer.new()
+	atmosphere_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	atmosphere_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(atmosphere_layer)
 
-	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", 24)
-	frame.add_child(root)
+	_build_title_layer()
+	_build_music_control()
+	_build_info_panel()
+	_build_roster_panel()
+	_build_bottom_bar()
 
+
+func _build_title_layer() -> void:
 	var title := Label.new()
 	title.text = "캐릭터 선택"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 52)
-	title.add_theme_color_override("font_color", Color(0.92, 0.78, 0.56))
-	root.add_child(title)
+	title.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	title.offset_left = 72
+	title.offset_top = 34
+	title.offset_right = 430
+	title.offset_bottom = 96
+	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_color_override("font_color", Color(0.98, 0.82, 0.48))
+	add_child(title)
 
-	var body := HBoxContainer.new()
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.add_theme_constant_override("separation", 24)
-	root.add_child(body)
-
-	_build_card_area(body)
-	_build_detail_area(body)
-
-
-func _build_card_area(parent: Control) -> void:
-	var left_column := VBoxContainer.new()
-	left_column.custom_minimum_size = Vector2(LEFT_PANEL_WIDTH, 0)
-	left_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	left_column.add_theme_constant_override("separation", 18)
-	parent.add_child(left_column)
-
-	card_scroll = ScrollContainer.new()
-	card_scroll.custom_minimum_size = Vector2(LEFT_PANEL_WIDTH, CARD_SIZE.y + 28.0)
-	card_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	card_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	card_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	left_column.add_child(card_scroll)
-
-	var rail := HBoxContainer.new()
-	rail.add_theme_constant_override("separation", CARD_GAP)
-	card_scroll.add_child(rail)
-
-	var slot_count := Catalog.get_slot_count()
-	for slot_index in range(slot_count):
-		rail.add_child(_make_card(slot_index))
-
-	var hint := Label.new()
-	hint.text = "마우스 휠 / ← → / A D 로 이동"
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 20)
-	hint.add_theme_color_override("font_color", Color(0.78, 0.68, 0.5))
-	left_column.add_child(hint)
+	var list_title := Label.new()
+	list_title.text = "클래스 선택"
+	list_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	list_title.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	list_title.offset_left = -450
+	list_title.offset_top = 54
+	list_title.offset_right = -72
+	list_title.offset_bottom = 94
+	list_title.add_theme_font_size_override("font_size", 24)
+	list_title.add_theme_color_override("font_color", Color(0.96, 0.86, 0.65))
+	add_child(list_title)
 
 
-func _build_detail_area(parent: Control) -> void:
-	detail_panel = Control.new()
-	detail_panel.clip_contents = true
-	detail_panel.custom_minimum_size = Vector2(DETAIL_PANEL_WIDTH, 0)
-	detail_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detail_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	parent.add_child(detail_panel)
+func _build_music_control() -> void:
+	music_player = AudioStreamPlayer.new()
+	var stream := load(SELECT_MUSIC_PATH) as AudioStreamMP3
+	if stream != null:
+		stream.loop = true
+		music_player.stream = stream
+		music_player.volume_db = -8.0
+		add_child(music_player)
+		music_player.play()
 
-	detail_animation_player = SheetAnimation.new()
-	detail_animation_player.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	detail_animation_player.visible = false
-	detail_panel.add_child(detail_animation_player)
+	music_button = Button.new()
+	music_button.text = "♪"
+	music_button.custom_minimum_size = Vector2(54, 54)
+	music_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	music_button.offset_left = -82
+	music_button.offset_top = 24
+	music_button.offset_right = -28
+	music_button.offset_bottom = 78
+	music_button.focus_mode = Control.FOCUS_NONE
+	music_button.add_theme_font_size_override("font_size", 28)
+	music_button.pressed.connect(_toggle_music)
+	add_child(music_button)
+	_sync_music_button()
 
-	detail_frame = ShowcasePanelFrame.new()
-	detail_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	detail_frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-	detail_panel.add_child(detail_frame)
 
-	detail_info_panel = PanelContainer.new()
-	detail_info_panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.015, 0.022, 0.036, 0.1), Color(0.77, 0.58, 0.34, 0.08), 1, 2))
-	detail_panel.add_child(detail_info_panel)
+func _build_info_panel() -> void:
+	info_panel = PanelContainer.new()
+	info_panel.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	info_panel.offset_left = 36
+	info_panel.offset_top = 116
+	info_panel.offset_right = 514
+	info_panel.offset_bottom = -168
+	add_child(info_panel)
 
-	var info_margin := MarginContainer.new()
-	info_margin.add_theme_constant_override("margin_left", 28)
-	info_margin.add_theme_constant_override("margin_top", 24)
-	info_margin.add_theme_constant_override("margin_right", 28)
-	info_margin.add_theme_constant_override("margin_bottom", 22)
-	detail_info_panel.add_child(info_margin)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left", 42)
+	margin.add_theme_constant_override("margin_top", 38)
+	margin.add_theme_constant_override("margin_right", 42)
+	margin.add_theme_constant_override("margin_bottom", 34)
+	info_panel.add_child(margin)
 
-	var info_column := VBoxContainer.new()
-	info_column.add_theme_constant_override("separation", 12)
-	info_margin.add_child(info_column)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 17)
+	margin.add_child(column)
 
-	detail_name_label = Label.new()
-	detail_name_label.add_theme_font_size_override("font_size", 42)
-	detail_name_label.add_theme_color_override("font_color", Color(0.94, 0.84, 0.68))
-	info_column.add_child(detail_name_label)
+	title_label = Label.new()
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title_label.add_theme_font_size_override("font_size", 48)
+	column.add_child(title_label)
 
-	detail_subtitle_label = Label.new()
-	detail_subtitle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail_subtitle_label.add_theme_font_size_override("font_size", 20)
-	detail_subtitle_label.add_theme_color_override("font_color", Color(0.82, 0.78, 0.9))
-	info_column.add_child(detail_subtitle_label)
+	tag_label = Label.new()
+	tag_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag_label.add_theme_font_size_override("font_size", 20)
+	column.add_child(tag_label)
 
-	info_column.add_child(_make_separator())
+	desc_label = Label.new()
+	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_label.add_theme_font_size_override("font_size", 17)
+	desc_label.add_theme_constant_override("line_spacing", 5)
+	column.add_child(desc_label)
 
-	var concept_title := Label.new()
-	concept_title.text = "캐릭터 정보"
-	concept_title.add_theme_font_size_override("font_size", 25)
-	concept_title.add_theme_color_override("font_color", Color(0.92, 0.72, 0.46))
-	info_column.add_child(concept_title)
+	column.add_child(_make_labeled_separator("스킬"))
 
-	detail_concept_label = Label.new()
-	detail_concept_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	detail_concept_label.add_theme_font_size_override("font_size", 18)
-	detail_concept_label.add_theme_color_override("font_color", Color(0.83, 0.82, 0.86))
-	info_column.add_child(detail_concept_label)
+	var skill_row := HBoxContainer.new()
+	skill_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	skill_row.add_theme_constant_override("separation", 20)
+	column.add_child(skill_row)
+	for index in range(4):
+		var icon := Emblem.new()
+		icon.custom_minimum_size = Vector2(68, 68)
+		skill_row.add_child(icon)
+		skill_icons.append(icon)
 
-	info_column.add_child(_make_separator())
+	column.add_child(_make_labeled_separator("주요 능력치"))
 
-	var skill_title := Label.new()
-	skill_title.text = "스킬"
-	skill_title.add_theme_font_size_override("font_size", 25)
-	skill_title.add_theme_color_override("font_color", Color(0.92, 0.72, 0.46))
-	info_column.add_child(skill_title)
+	_make_stat_row(column, "atk", "공격력")
+	_make_stat_row(column, "mob", "기동력")
+	_make_stat_row(column, "def", "방어력")
 
-	skill_scroll = ScrollContainer.new()
-	skill_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	skill_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	skill_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	info_column.add_child(skill_scroll)
 
-	skill_list = VBoxContainer.new()
-	skill_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	skill_list.add_theme_constant_override("separation", 9)
-	skill_scroll.add_child(skill_list)
+func _build_live_stage() -> void:
+	live_stage = Control.new()
+	live_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	live_stage.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(live_stage)
 
+	live_fallback = FocusedTexture.new()
+	live_fallback.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	live_fallback.set_anchors_preset(Control.PRESET_FULL_RECT)
+	live_stage.add_child(live_fallback)
+
+	for index in range(2):
+		var animation := SheetAnimation.new()
+		animation.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		animation.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		animation.set_anchors_preset(Control.PRESET_FULL_RECT)
+		animation.modulate.a = 1.0 if index == 0 else 0.0
+		live_stage.add_child(animation)
+		live_animation_layers.append(animation)
+
+	live_caption = Label.new()
+	live_caption.text = "Live2D 미리보기"
+	live_caption.visible = false
+	live_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	live_caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	live_caption.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	live_caption.offset_left = 250
+	live_caption.offset_top = -92
+	live_caption.offset_right = -250
+	live_caption.offset_bottom = -42
+	live_caption.add_theme_font_size_override("font_size", 19)
+	live_caption.add_theme_color_override("font_color", Color(1.0, 0.95, 0.84))
+	live_caption.add_theme_stylebox_override("normal", _make_panel_style(Color(0.18, 0.16, 0.24, 0.42), Color(1.0, 0.9, 0.66, 0.42), 1, 28))
+	live_stage.add_child(live_caption)
+
+
+func _build_roster_panel() -> void:
+	var list := VBoxContainer.new()
+	list.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	list.offset_left = -450
+	list.offset_top = 112
+	list.offset_right = -44
+	list.offset_bottom = -146
+	list.add_theme_constant_override("separation", 13)
+	add_child(list)
+
+	for index in range(characters.size()):
+		list.add_child(_make_roster_card(index))
+
+	for locked in LOCKED_SLOTS:
+		list.add_child(_make_locked_card(locked))
+
+
+func _build_bottom_bar() -> void:
 	select_button = Button.new()
 	select_button.text = "선택하기"
-	select_button.custom_minimum_size = Vector2(300, 64)
-	select_button.add_theme_font_size_override("font_size", 28)
+	select_button.custom_minimum_size = Vector2(360, 72)
+	select_button.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	select_button.offset_left = 640
+	select_button.offset_top = -108
+	select_button.offset_right = -640
+	select_button.offset_bottom = -36
+	select_button.add_theme_font_size_override("font_size", 30)
 	select_button.pressed.connect(_start_selected_character)
-	info_column.add_child(select_button)
+	select_button.mouse_entered.connect(_on_select_button_hovered.bind(true))
+	select_button.mouse_exited.connect(_on_select_button_hovered.bind(false))
+	add_child(select_button)
+
+	var back := Button.new()
+	back.text = "← 뒤로가기"
+	back.disabled = true
+	back.custom_minimum_size = Vector2(170, 54)
+	back.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	back.offset_left = 48
+	back.offset_top = -94
+	back.offset_right = 218
+	back.offset_bottom = -40
+	back.add_theme_font_size_override("font_size", 20)
+	back.add_theme_stylebox_override("disabled", _make_panel_style(Color(0.18, 0.21, 0.30, 0.34), Color(1.0, 1.0, 1.0, 0.22), 1, 26))
+	add_child(back)
 
 
-func _make_card(slot_index: int) -> Button:
+func _make_roster_card(index: int) -> Button:
+	var character: Dictionary = characters[index]
 	var button := Button.new()
-	button.custom_minimum_size = CARD_SIZE
+	button.custom_minimum_size = Vector2(406, 98)
 	button.focus_mode = Control.FOCUS_NONE
 	button.clip_contents = true
-	button.add_theme_stylebox_override("normal", _make_card_style(Color(0.02, 0.03, 0.05, 0.86), Color(0.48, 0.36, 0.22, 0.72), 1))
-	button.add_theme_stylebox_override("hover", _make_card_style(Color(0.04, 0.05, 0.08, 0.92), Color(0.72, 0.56, 0.34, 0.9), 2))
-	button.add_theme_stylebox_override("pressed", _make_card_style(Color(0.04, 0.04, 0.07, 0.96), Color(0.88, 0.68, 0.42, 1.0), 2))
+	button.pressed.connect(_on_card_pressed.bind(index))
+	button.mouse_entered.connect(_on_roster_card_hovered.bind(index, true))
+	button.mouse_exited.connect(_on_roster_card_hovered.bind(index, false))
+	roster_buttons.append(button)
+	roster_hovered.append(false)
 
-	if slot_index < characters.size():
-		var character: Dictionary = characters[slot_index]
-		button.pressed.connect(_on_card_pressed.bind(slot_index))
+	var portrait := FocusedTexture.new()
+	portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	portrait.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	portrait.offset_left = -148
+	portrait.offset_top = 8
+	portrait.offset_right = -8
+	portrait.offset_bottom = -8
+	portrait.set_texture_data(
+		_load_texture(character.get("select_roster_image", character["card_image"])),
+		character.get("select_roster_mode", "contain"),
+		character.get("select_roster_focus", Vector2(0.5, 0.5))
+	)
+	button.add_child(portrait)
+	roster_portraits.append(portrait)
 
-		var image := FocusedTexture.new()
-		image.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		image.set_anchors_preset(Control.PRESET_FULL_RECT)
-		image.offset_left = 8
-		image.offset_top = 8
-		image.offset_right = -8
-		image.offset_bottom = -112
-		image.set_texture_data(
-			_load_texture(character["card_image"]),
-			character.get("card_mode", "cover"),
-			character.get("card_focus", Vector2(0.5, 0.5)),
-			Color.WHITE,
-			Color(0.0, 0.0, 0.0, 0.08)
-		)
-		button.add_child(image)
+	var badge := FocusedTexture.new()
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	badge.offset_left = 18
+	badge.offset_top = 17
+	badge.offset_right = 82
+	badge.offset_bottom = -17
+	badge.set_texture_data(
+		_load_texture(character.get("select_roster_icon", "")),
+		"contain",
+		Vector2(0.5, 0.5)
+	)
+	button.add_child(badge)
+	roster_badges.append(badge)
 
-		var bottom_shade := ColorRect.new()
-		bottom_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		bottom_shade.color = Color(0.0, 0.0, 0.0, 0.48)
-		bottom_shade.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-		bottom_shade.offset_top = -120
-		bottom_shade.offset_bottom = 0
-		button.add_child(bottom_shade)
+	var name := Label.new()
+	name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name.text = character["name"]
+	name.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	name.offset_left = 96
+	name.offset_top = 18
+	name.offset_right = -142
+	name.offset_bottom = -48
+	name.add_theme_font_size_override("font_size", 25)
+	button.add_child(name)
+	roster_name_labels.append(name)
 
-		var card_symbol := CardSymbol.new()
-		card_symbol.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card_symbol.set_symbol_data(character["skills"][0].get("icon_shape", "star"), character["accent_color"], false)
-		card_symbol.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-		card_symbol.offset_top = -112
-		card_symbol.offset_bottom = -58
-		button.add_child(card_symbol)
-		card_symbol_controls.append(card_symbol)
+	var tag := Label.new()
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tag.text = character.get("select_tag", character.get("subtitle", ""))
+	tag.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	tag.offset_left = 98
+	tag.offset_top = 52
+	tag.offset_right = -142
+	tag.offset_bottom = -16
+	tag.add_theme_font_size_override("font_size", 16)
+	button.add_child(tag)
+	roster_tag_labels.append(tag)
 
-		var name_label := Label.new()
-		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		name_label.text = character["name"]
-		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		name_label.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-		name_label.offset_top = -58
-		name_label.offset_bottom = -8
-		name_label.add_theme_font_size_override("font_size", 28)
-		name_label.add_theme_color_override("font_color", Color(0.95, 0.86, 0.7))
-		button.add_child(name_label)
-		card_name_labels.append(name_label)
-
-		var frame_overlay := CardFrameOverlay.new()
-		frame_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		frame_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-		frame_overlay.set_state(character["accent_color"], false)
-		button.add_child(frame_overlay)
-		card_frame_overlays.append(frame_overlay)
-	else:
-		button.disabled = true
-		button.add_theme_stylebox_override("disabled", _make_card_style(Color(0.015, 0.022, 0.035, 0.68), Color(0.35, 0.28, 0.2, 0.45), 1))
-
-		var locked_frame := CardFrameOverlay.new()
-		locked_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		locked_frame.set_anchors_preset(Control.PRESET_FULL_RECT)
-		locked_frame.set_state(Color(0.58, 0.46, 0.32, 0.68), false, true)
-		button.add_child(locked_frame)
-
-		var lock_label := Label.new()
-		lock_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		lock_label.text = "?"
-		lock_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lock_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		lock_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-		lock_label.add_theme_font_size_override("font_size", 72)
-		lock_label.add_theme_color_override("font_color", Color(0.76, 0.7, 0.62, 0.55))
-		button.add_child(lock_label)
-
-	card_buttons.append(button)
+	var frame := OutlineFrame.new()
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	frame.set_state(character["accent_color"], false)
+	button.add_child(frame)
+	roster_frames.append(frame)
 	return button
+
+
+func _make_locked_card(data: Dictionary) -> Button:
+	var button := Button.new()
+	button.disabled = true
+	button.custom_minimum_size = Vector2(406, 98)
+	button.focus_mode = Control.FOCUS_NONE
+	button.clip_contents = true
+	button.add_theme_stylebox_override("disabled", _make_roster_card_style(Color(0.96, 0.97, 1.0, 0.42), Color(1.0, 1.0, 1.0, 0.3), 1, 36))
+
+	var preview := FocusedTexture.new()
+	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.set_anchors_preset(Control.PRESET_RIGHT_WIDE)
+	preview.offset_left = -158
+	preview.offset_top = 8
+	preview.offset_right = -8
+	preview.offset_bottom = -8
+	preview.modulate.a = 0.8
+	preview.set_texture_data(_load_texture(data.get("image", "")), "contain", Vector2(0.5, 0.5))
+	button.add_child(preview)
+
+	var badge := Emblem.new()
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	badge.offset_left = 18
+	badge.offset_top = 18
+	badge.offset_right = 82
+	badge.offset_bottom = -18
+	badge.set_icon_data(data.get("shape", "star"), data.get("color", Color(0.72, 0.76, 0.86)), true)
+	button.add_child(badge)
+
+	var name := Label.new()
+	name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name.text = "???"
+	name.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	name.offset_left = 98
+	name.offset_top = 18
+	name.offset_right = -42
+	name.offset_bottom = -48
+	name.add_theme_font_size_override("font_size", 24)
+	name.add_theme_color_override("font_color", Color(0.25, 0.28, 0.42, 0.54))
+	button.add_child(name)
+
+	var tag := Label.new()
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tag.text = "추가 예정"
+	tag.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	tag.offset_left = 100
+	tag.offset_top = 52
+	tag.offset_right = -42
+	tag.offset_bottom = -16
+	tag.add_theme_font_size_override("font_size", 16)
+	tag.add_theme_color_override("font_color", Color(0.35, 0.38, 0.5, 0.48))
+	button.add_child(tag)
+
+	var frame := OutlineFrame.new()
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	frame.set_state(data.get("color", Color(0.6, 0.6, 0.6)), false, true)
+	button.add_child(frame)
+	return button
+
+
+func _make_labeled_separator(text: String) -> Control:
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	var label := Label.new()
+	label.text = text
+	label.add_theme_font_size_override("font_size", 16)
+	row.add_child(label)
+	return row
+
+
+func _make_stat_row(parent: VBoxContainer, id: String, label_text: String) -> void:
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 6)
+	parent.add_child(column)
+	stat_rows[id] = column
+
+	var label_row := HBoxContainer.new()
+	column.add_child(label_row)
+	var label := Label.new()
+	label.text = label_text
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.add_theme_font_size_override("font_size", 17)
+	label_row.add_child(label)
+
+	var value := Label.new()
+	value.text = "0"
+	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value.custom_minimum_size = Vector2(44, 0)
+	value.add_theme_font_size_override("font_size", 17)
+	label_row.add_child(value)
+	stat_values[id] = value
+
+	var bg := Panel.new()
+	bg.custom_minimum_size = Vector2(0, 12)
+	bg.clip_contents = true
+	bg.add_theme_stylebox_override("panel", _make_bar_style(Color(0.88, 0.88, 0.94, 0.56), Color.TRANSPARENT, 0, 7))
+	column.add_child(bg)
+
+	var fill := ColorRect.new()
+	fill.color = Color(0.48, 0.68, 1.0)
+	fill.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	fill.anchor_right = 0.0
+	fill.offset_right = 0
+	bg.add_child(fill)
+	stat_bars[id] = fill
 
 
 func _on_card_pressed(index: int) -> void:
@@ -826,230 +694,393 @@ func _on_card_pressed(index: int) -> void:
 	_update_selection()
 
 
+func _on_roster_card_hovered(index: int, hovered: bool) -> void:
+	if index < 0 or index >= roster_hovered.size():
+		return
+	roster_hovered[index] = hovered
+	_update_roster(characters[selected_index])
+
+
+func _on_select_button_hovered(hovered: bool) -> void:
+	if select_button == null:
+		return
+	var target_scale := Vector2(1.045, 1.045) if hovered else Vector2.ONE
+	select_button.pivot_offset = select_button.size * 0.5
+	create_tween().tween_property(select_button, "scale", target_scale, 0.16).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+
+func _toggle_music() -> void:
+	music_enabled = not music_enabled
+	if music_player != null:
+		if music_enabled:
+			if not music_player.playing:
+				music_player.play()
+		else:
+			music_player.stop()
+	_sync_music_button()
+
+
+func _sync_music_button() -> void:
+	if music_button == null:
+		return
+	music_button.text = "♪" if music_enabled else "♩"
+	music_button.modulate.a = 1.0 if music_enabled else 0.52
+	var fill := Color(1.0, 1.0, 1.0, 0.54 if music_enabled else 0.28)
+	var border := Color(1.0, 0.9, 0.66, 0.5 if music_enabled else 0.22)
+	music_button.add_theme_stylebox_override("normal", _make_glow_style(fill, border, Color(0.98, 0.82, 0.48), 0.18 if music_enabled else 0.0))
+	music_button.add_theme_stylebox_override("hover", _make_glow_style(fill.lightened(0.08), Color(1.0, 0.95, 0.78, 0.72), Color(0.98, 0.82, 0.48), 0.32))
+	music_button.add_theme_stylebox_override("pressed", _make_glow_style(fill.darkened(0.08), border, Color(0.98, 0.82, 0.48), 0.22))
+	music_button.add_theme_color_override("font_color", Color(0.28, 0.22, 0.52) if music_enabled else Color(0.42, 0.44, 0.56))
+
+
 func _move_selection(direction: int) -> void:
 	if characters.is_empty():
 		return
-
 	selected_index = posmod(selected_index + direction, characters.size())
 	_update_selection()
 
 
-func _update_selection() -> void:
+func _update_selection(animated := true) -> void:
 	if characters.is_empty():
 		return
 
 	var character: Dictionary = characters[selected_index]
 	var theme_color: Color = character["theme_color"]
 	var accent_color: Color = character["accent_color"]
+	atmosphere_layer.set_colors(theme_color, accent_color)
+	_update_background(character, animated)
+	_update_info_panel(character, animated)
+	_update_live_preview(character, animated)
+	_update_roster(character)
 
-	for index in range(card_buttons.size()):
-		if index >= characters.size():
-			continue
 
-		var button := card_buttons[index]
-		var character_for_card: Dictionary = characters[index]
-		if index == selected_index:
-			button.add_theme_stylebox_override("normal", _make_card_style(Color(0.05, 0.045, 0.052, 0.95), accent_color, 3))
-			button.add_theme_stylebox_override("hover", _make_card_style(Color(0.06, 0.05, 0.06, 0.98), accent_color.lightened(0.16), 3))
-			card_name_labels[index].add_theme_color_override("font_color", Color(1.0, 0.92, 0.74))
-			card_symbol_controls[index].set_symbol_data(character_for_card["skills"][0].get("icon_shape", "star"), accent_color, true)
-			card_frame_overlays[index].set_state(accent_color, true)
-		else:
-			button.add_theme_stylebox_override("normal", _make_card_style(Color(0.02, 0.03, 0.05, 0.86), Color(0.48, 0.36, 0.22, 0.72), 1))
-			button.add_theme_stylebox_override("hover", _make_card_style(Color(0.04, 0.05, 0.08, 0.92), Color(0.72, 0.56, 0.34, 0.9), 2))
-			card_name_labels[index].add_theme_color_override("font_color", Color(0.9, 0.82, 0.68))
-			card_symbol_controls[index].set_symbol_data(character_for_card["skills"][0].get("icon_shape", "star"), Color(0.72, 0.58, 0.42), false)
-			card_frame_overlays[index].set_state(Color(0.48, 0.36, 0.22, 0.72), false)
-
-	background_image.set_texture_data(
-		_load_texture(character.get("select_background_image", character["detail_image"])),
+func _update_background(character: Dictionary, animated: bool) -> void:
+	var next_index := 1 - active_background
+	var next_layer: FocusedTexture = background_layers[next_index]
+	var current_layer: FocusedTexture = background_layers[active_background]
+	next_layer.set_texture_data(
+		_load_texture(character.get("select_background_image", character.get("detail_image", ""))),
 		character.get("select_background_mode", "cover"),
 		character.get("select_background_focus", Vector2(0.5, 0.5)),
 		Color.WHITE,
 		Color(0.0, 0.0, 0.0, 0.0)
 	)
-	detail_info_panel.add_theme_stylebox_override("panel", _make_panel_style(Color(0.015, 0.022, 0.036, 0.24), theme_color.lightened(0.08), 1, 2))
-	detail_frame.set_colors(theme_color, accent_color)
-
-	var info_side: String = character.get("info_side", "left")
-	_position_detail_info_panel(info_side, character.get("info_width", 520.0))
-	_position_detail_animation(info_side, character.get("info_width", 520.0))
-	_update_detail_animation(character)
-	call_deferred("_sync_fade_layer", theme_color, accent_color, info_side)
-
-	detail_name_label.text = character["name"]
-	detail_name_label.add_theme_color_override("font_color", Color(0.98, 0.88, 0.68))
-	detail_subtitle_label.text = character["subtitle"]
-	detail_concept_label.text = character["concept"]
-	select_button.add_theme_stylebox_override("normal", _make_panel_style(Color(0.06, 0.06, 0.07, 0.68), accent_color.darkened(0.28), 1, 2))
-	select_button.add_theme_stylebox_override("hover", _make_panel_style(Color(0.11, 0.1, 0.12, 0.78), accent_color, 1, 2))
-	select_button.add_theme_stylebox_override("pressed", _make_panel_style(Color(0.04, 0.04, 0.05, 0.88), accent_color.lightened(0.12), 1, 2))
-
-	_rebuild_skill_list(character["skills"])
-	call_deferred("_scroll_selected_card_into_view_deferred")
-
-
-func _position_detail_info_panel(side: String, panel_width: float) -> void:
-	detail_info_panel.anchor_top = 0.0
-	detail_info_panel.anchor_bottom = 1.0
-	detail_info_panel.offset_top = DETAIL_INFO_TOP
-	detail_info_panel.offset_bottom = -DETAIL_INFO_BOTTOM
-
-	if side == "right":
-		detail_info_panel.anchor_left = 1.0
-		detail_info_panel.anchor_right = 1.0
-		detail_info_panel.offset_left = -panel_width - 28.0
-		detail_info_panel.offset_right = -28.0
+	if animated:
+		next_layer.modulate.a = 0.0
+		var tween := create_tween().set_parallel(true)
+		tween.tween_property(next_layer, "modulate:a", 1.0, 0.86).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tween.tween_property(current_layer, "modulate:a", 0.0, 0.86).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	else:
-		detail_info_panel.anchor_left = 0.0
-		detail_info_panel.anchor_right = 0.0
-		detail_info_panel.offset_left = 22.0
-		detail_info_panel.offset_right = panel_width + 22.0
+		next_layer.modulate.a = 1.0
+		current_layer.modulate.a = 0.0
+	active_background = next_index
 
 
-func _position_detail_animation(side: String, panel_width: float) -> void:
-	if detail_animation_player == null:
-		return
+func _update_info_panel(character: Dictionary, animated: bool) -> void:
+	var theme_color: Color = character["theme_color"]
+	var accent_color: Color = character["accent_color"]
+	var light_theme: bool = character.get("select_light_theme", false)
+	var panel_fill := Color(1.0, 1.0, 1.0, 0.66) if light_theme else Color(0.08, 0.035, 0.04, 0.78)
+	var text_main := Color(0.12, 0.22, 0.54) if light_theme else accent_color.lightened(0.1)
+	var text_body := Color(0.18, 0.22, 0.34) if light_theme else Color(0.86, 0.9, 0.96)
 
-	detail_animation_player.anchor_top = 0.0
-	detail_animation_player.anchor_bottom = 1.0
-	detail_animation_player.offset_top = DETAIL_VIDEO_MARGIN
-	detail_animation_player.offset_bottom = -DETAIL_VIDEO_MARGIN
+	if animated:
+		info_panel.modulate.a = 0.88
+		info_panel.position.y += 3.0
+		var info_tween := create_tween().set_parallel(true)
+		info_tween.tween_property(info_panel, "modulate:a", 1.0, 0.78).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		info_tween.tween_property(info_panel, "position:y", info_panel.position.y - 3.0, 0.78).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
-	if side == "right":
-		detail_animation_player.anchor_left = 0.0
-		detail_animation_player.anchor_right = 1.0
-		detail_animation_player.offset_left = DETAIL_VIDEO_MARGIN
-		detail_animation_player.offset_right = -panel_width - DETAIL_VIDEO_GAP
-	else:
-		detail_animation_player.anchor_left = 0.0
-		detail_animation_player.anchor_right = 1.0
-		detail_animation_player.offset_left = panel_width + DETAIL_VIDEO_GAP
-		detail_animation_player.offset_right = -DETAIL_VIDEO_MARGIN
+	info_panel.add_theme_stylebox_override("panel", _make_panel_style(panel_fill, Color(1.0, 1.0, 1.0, 0.72) if light_theme else Color(accent_color.r, accent_color.g, accent_color.b, 0.34), 1, 28))
+	title_label.text = character.get("select_name", character["name"])
+	title_label.add_theme_color_override("font_color", text_main)
+	tag_label.text = character.get("select_tag", character.get("subtitle", ""))
+	tag_label.add_theme_color_override("font_color", accent_color if light_theme else Color(1.0, 0.82, 0.62))
+	desc_label.text = character.get("select_description", character.get("concept", ""))
+	desc_label.add_theme_color_override("font_color", text_body)
+	if animated:
+		_pulse_info_text()
+
+	var skills: Array = character.get("skills", [])
+	for index in range(skill_icons.size()):
+		var icon: Emblem = skill_icons[index]
+		if index < skills.size():
+			var skill: Dictionary = skills[index]
+			icon.visible = true
+			icon.set_icon_data(skill.get("icon_shape", "star"), skill.get("color", theme_color), true)
+			if animated:
+				_fade_control(icon, 0.08 + float(index) * 0.065, 0.0, 1.0, 0.56)
+		else:
+			icon.visible = false
+
+	var stats: Dictionary = character.get("select_stats", {"atk": 70, "mob": 70, "def": 70})
+	var stat_delay := 0.0
+	for id in stat_bars.keys():
+		var value := int(stats.get(id, 0))
+		var fill: ColorRect = stat_bars[id]
+		var label: Label = stat_values[id]
+		label.add_theme_color_override("font_color", text_body)
+		fill.color = theme_color
+		var target_anchor := clampf(float(value) / 100.0, 0.0, 1.0)
+		if animated:
+			var bar_tween := create_tween()
+			bar_tween.tween_interval(stat_delay)
+			bar_tween.tween_property(fill, "anchor_right", target_anchor, 1.08).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+			var current_value := float(stat_display_values.get(id, value))
+			var value_tween := create_tween()
+			value_tween.tween_interval(stat_delay)
+			value_tween.tween_method(Callable(self, "_set_stat_display_value").bind(id), current_value, float(value), 1.08).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+			if stat_rows.has(id):
+				_fade_control(stat_rows[id], stat_delay, 0.72, 1.0, 0.58)
+			stat_delay += 0.11
+		else:
+			fill.anchor_right = target_anchor
+			_set_stat_display_value(float(value), id)
+
+	var normal_fill := Color(1.0, 1.0, 1.0, 0.76) if light_theme else Color(0.02, 0.02, 0.025, 0.78)
+	var normal_text := accent_color.darkened(0.22) if light_theme else Color(0.96, 0.92, 0.9)
+	select_button.add_theme_color_override("font_color", normal_text)
+	select_button.add_theme_color_override("font_hover_color", Color.WHITE)
+	select_button.add_theme_stylebox_override("normal", _make_glow_style(normal_fill, Color(1.0, 1.0, 1.0, 0.84), accent_color, 0.18))
+	select_button.add_theme_stylebox_override("hover", _make_glow_style(accent_color, Color(1.0, 1.0, 1.0, 0.95), accent_color, 0.58))
+	select_button.add_theme_stylebox_override("pressed", _make_glow_style(accent_color.darkened(0.18), Color(1.0, 0.92, 0.72, 0.9), accent_color, 0.42))
 
 
-func _update_detail_animation(character: Dictionary) -> void:
-	if detail_animation_player == null:
-		return
-
-	var sheet_path: String = character.get("select_animation_sheet", "")
-	if sheet_path.is_empty():
-		detail_animation_player.clear_animation()
-		return
-
-	var texture := _load_texture(sheet_path)
-	if texture == null:
-		detail_animation_player.clear_animation()
-		return
-
-	detail_animation_player.set_animation_data(
-		texture,
-		int(character.get("select_animation_columns", 4)),
-		int(character.get("select_animation_rows", 6)),
-		float(character.get("select_animation_fps", 12.0)),
-		character.get("select_animation_mode", "cover"),
-		character.get("select_animation_focus", Vector2(0.5, 0.5))
+func _update_live_preview(character: Dictionary, animated: bool) -> void:
+	live_fallback.set_texture_data(
+		_load_texture(character.get("detail_image", character.get("card_image", ""))),
+		character.get("detail_mode", "cover"),
+		character.get("detail_focus", Vector2(0.5, 0.5)),
+		Color.WHITE,
+		character.get("detail_overlay_color", Color.TRANSPARENT)
 	)
 
-
-func _sync_fade_layer(theme_color: Color, accent_color: Color, info_side: String) -> void:
-	if fade_layer == null or detail_info_panel == null:
-		return
-
-	var global_rect := detail_info_panel.get_global_rect()
-	if global_rect.size.x <= 0.0 or global_rect.size.y <= 0.0:
-		return
-
-	var local_position: Vector2 = fade_layer.get_global_transform().affine_inverse() * global_rect.position
-	fade_layer.set_fade_data(theme_color, accent_color, Rect2(local_position, global_rect.size), info_side)
-
-
-func _rebuild_skill_list(skills: Array) -> void:
-	for child in skill_list.get_children():
-		child.queue_free()
-
-	for skill in skills:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 14)
-		skill_list.add_child(row)
-
-		var icon_texture := _load_texture(skill.get("icon_path", ""))
-		if icon_texture != null:
-			var icon_image := FocusedTexture.new()
-			icon_image.custom_minimum_size = Vector2(62, 62)
-			icon_image.set_texture_data(icon_texture, "contain", Vector2(0.5, 0.5))
-			row.add_child(icon_image)
+	var sheet_path: String = character.get("select_animation_sheet", "")
+	var texture := _load_texture(sheet_path)
+	if texture != null:
+		live_fallback.modulate.a = 0.0
+		var next_index := 1 - active_live_animation if animated else active_live_animation
+		var current_layer: SheetAnimation = live_animation_layers[active_live_animation]
+		var next_layer: SheetAnimation = live_animation_layers[next_index]
+		next_layer.visible = true
+		next_layer.modulate = Color(1.08, 1.08, 1.08, 0.0 if animated else 1.0)
+		next_layer.set_animation_data(
+			texture,
+			int(character.get("select_animation_columns", 4)),
+			int(character.get("select_animation_rows", 6)),
+			float(character.get("select_animation_fps", 12.0)),
+			character.get("select_animation_mode", "cover"),
+			character.get("select_animation_focus", Vector2(0.5, 0.5))
+		)
+		if animated:
+			var tween := create_tween().set_parallel(true)
+			tween.tween_property(next_layer, "modulate:a", 1.0, 0.86).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			tween.tween_property(current_layer, "modulate:a", 0.0, 0.86).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		else:
-			var skill_icon := SkillIcon.new()
-			skill_icon.custom_minimum_size = Vector2(62, 62)
-			skill_icon.set_icon_data(skill.get("icon_shape", "star"), skill["color"])
-			row.add_child(skill_icon)
+			current_layer.modulate.a = 1.0
+		active_live_animation = next_index
+	else:
+		for layer in live_animation_layers:
+			layer.clear_animation()
+		live_fallback.modulate.a = 1.0
 
-		var text_column := VBoxContainer.new()
-		text_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(text_column)
-
-		var name_label := Label.new()
-		name_label.text = skill["name"]
-		name_label.add_theme_font_size_override("font_size", 20)
-		name_label.add_theme_color_override("font_color", Color(0.94, 0.9, 0.98))
-		text_column.add_child(name_label)
-
-		var description_label := Label.new()
-		description_label.text = skill["description"]
-		description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		description_label.add_theme_font_size_override("font_size", 16)
-		description_label.add_theme_color_override("font_color", Color(0.72, 0.72, 0.78))
-		text_column.add_child(description_label)
+	live_caption.modulate = character["accent_color"].lightened(0.08)
+	_update_live_layout()
 
 
-func _scroll_selected_card_into_view_deferred() -> void:
-	if card_scroll == null or selected_index >= card_buttons.size():
+func _update_live_layout() -> void:
+	if live_stage == null:
 		return
+	live_stage.set_anchors_preset(Control.PRESET_FULL_RECT)
+	live_stage.offset_left = 0
+	live_stage.offset_top = 0
+	live_stage.offset_right = 0
+	live_stage.offset_bottom = 0
 
-	var card := card_buttons[selected_index]
-	var visible_left := float(card_scroll.scroll_horizontal)
-	var visible_right := visible_left + card_scroll.size.x
-	var card_left := card.position.x
-	var card_right := card_left + card.size.x
 
-	if card_left < visible_left:
-		card_scroll.scroll_horizontal = int(maxf(0.0, card_left - 10.0))
-	elif card_right > visible_right:
-		card_scroll.scroll_horizontal = int(card_right - card_scroll.size.x + 10.0)
+func _update_roster(character: Dictionary) -> void:
+	for index in range(roster_buttons.size()):
+		var button := roster_buttons[index]
+		var frame: OutlineFrame = roster_frames[index]
+		var badge: FocusedTexture = roster_badges[index]
+		var name: Label = roster_name_labels[index]
+		var tag: Label = roster_tag_labels[index]
+		var card_character: Dictionary = characters[index]
+		var selected := index == selected_index
+		var hovered := bool(roster_hovered[index]) if index < roster_hovered.size() else false
+		var accent: Color = card_character["accent_color"]
+		var fill := Color(1.0, 1.0, 1.0, 0.9) if selected else Color(1.0, 1.0, 1.0, 0.58 if hovered else 0.42)
+		if not card_character.get("select_light_theme", false):
+			fill = Color(0.24, 0.07, 0.07, 0.86) if selected else Color(0.12, 0.07, 0.07, 0.7 if hovered else 0.52)
+
+		button.add_theme_stylebox_override("normal", _make_roster_card_style(fill, Color(1.0, 1.0, 1.0, 0.28 if selected else 0.12), 1, 36))
+		button.add_theme_stylebox_override("hover", _make_roster_hover_style(fill.lightened(0.06), Color(1.0, 1.0, 1.0, 0.24), accent, 0.18))
+		frame.set_state(accent, selected)
+		badge.set_texture_data(
+			_load_texture(card_character.get("select_roster_icon", "")),
+			"contain",
+			Vector2(0.5, 0.5)
+		)
+		badge.modulate.a = 1.0 if selected or hovered else 0.86
+		name.add_theme_color_override("font_color", accent.darkened(0.22) if card_character.get("select_light_theme", false) else Color(1.0, 0.86, 0.74))
+		tag.add_theme_color_override("font_color", Color(0.2, 0.24, 0.38) if card_character.get("select_light_theme", false) else Color(0.86, 0.9, 0.96))
+		button.pivot_offset = button.size * 0.5
+		var target_scale := Vector2(1.018, 1.018) if hovered or selected else Vector2.ONE
+		var target_x := -7.0 if selected else (-3.0 if hovered else 0.0)
+		var tween := create_tween().set_parallel(true)
+		tween.tween_property(button, "scale", target_scale, 0.28).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tween.tween_property(button, "position:x", target_x, 0.28).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 
 func _start_selected_character() -> void:
 	if selected_index < 0 or selected_index >= characters.size():
 		return
-
 	GameState.set_selected_character(characters[selected_index]["id"])
 	get_tree().change_scene_to_file(Catalog.GAME_SCENE_PATH)
+
+
+func _mark_input_as_handled() -> void:
+	var viewport := get_viewport()
+	if viewport != null:
+		viewport.set_input_as_handled()
+
+
+func _get_selectable_characters() -> Array:
+	var visible: Array = []
+	for character in Catalog.get_characters():
+		if SELECTABLE_IDS.has(character.get("id", "")):
+			visible.append(_with_select_defaults(character))
+	return visible
+
+
+func _with_select_defaults(character: Dictionary) -> Dictionary:
+	var copy := character.duplicate(true)
+	match copy.get("id", ""):
+		"mage":
+			copy["select_name"] = "아크메이지"
+			copy["select_tag"] = "불, 독"
+			copy["select_description"] = "모든 것을 불태우는 불 마법과 적을 중독시키는 독 마법을 사용하는 마법사입니다. 강력한 광역 공격과 상태 이상으로 전장을 지배합니다."
+			copy["select_stats"] = {"atk": 92, "mob": 40, "def": 60}
+			copy["select_light_theme"] = true
+			copy["theme_color"] = Color(0.36, 0.54, 0.9)
+			copy["accent_color"] = Color(0.43, 0.34, 0.86)
+			copy["select_animation_sheet"] = "res://assets/players/mage/select/mage_live_2d_sheet_hq.png"
+			copy["select_animation_columns"] = 8
+			copy["select_animation_rows"] = 12
+			copy["select_animation_fps"] = 24.0
+			copy["select_animation_mode"] = "cover"
+			copy["select_animation_focus"] = Vector2(0.5, 0.5)
+			copy["select_roster_image"] = "res://assets/ui/character_select/roster/mage_mini_select_roster.png"
+			copy["select_roster_mode"] = "contain"
+			copy["select_roster_icon"] = "res://assets/ui/character_select/roster/mage_icon_circle.png"
+		"hunter":
+			copy["select_name"] = "헌터"
+			copy["select_tag"] = "암흑, 연계"
+			copy["select_description"] = "빠른 검술로 적을 추적하는 근접형 헌터입니다. 적에게 표식을 남기고 연속 공격을 이어가며, 순식간에 치명적인 피해를 입힙니다."
+			copy["select_stats"] = {"atk": 98, "mob": 82, "def": 40}
+			copy["select_light_theme"] = false
+			copy["theme_color"] = Color(0.94, 0.26, 0.24)
+			copy["accent_color"] = Color(0.96, 0.38, 0.32)
+			copy["select_animation_sheet"] = "res://assets/players/hunter/select/hunter_live_2d_sheet_hq.png"
+			copy["select_animation_columns"] = 8
+			copy["select_animation_rows"] = 12
+			copy["select_animation_fps"] = 24.0
+			copy["select_animation_mode"] = "cover"
+			copy["select_animation_focus"] = Vector2(0.5, 0.5)
+			copy["select_roster_image"] = "res://assets/ui/character_select/roster/hunter_mini_select_roster.png"
+			copy["select_roster_mode"] = "contain"
+			copy["select_roster_icon"] = "res://assets/ui/character_select/roster/hunter_icon_circle.png"
+	return copy
+
+
+func _find_visible_character_index(character_id: String) -> int:
+	for index in range(characters.size()):
+		if characters[index].get("id", "") == character_id:
+			return index
+	return 0
+
+
+func _set_stat_display_value(value: float, id: String) -> void:
+	stat_display_values[id] = value
+	if stat_values.has(id):
+		var label: Label = stat_values[id]
+		label.text = str(roundi(value))
+
+
+func _pulse_info_text() -> void:
+	_fade_slide_control(title_label, 0.0, 0.0, 1.0, 2.0, 0.62)
+	_fade_slide_control(tag_label, 0.08, 0.0, 1.0, 2.0, 0.62)
+	desc_label.modulate.a = 0.0
+	desc_label.position.y += 3.0
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(desc_label, "modulate:a", 1.0, 0.72).set_delay(0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property(desc_label, "position:y", desc_label.position.y - 3.0, 0.72).set_delay(0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+
+func _fade_control(control: Control, delay: float, from_alpha: float, to_alpha: float, duration: float) -> void:
+	control.modulate.a = from_alpha
+	var tween := create_tween()
+	tween.tween_interval(delay)
+	tween.tween_property(control, "modulate:a", to_alpha, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+
+func _fade_slide_control(control: Control, delay: float, from_alpha: float, to_alpha: float, y_offset: float, duration: float) -> void:
+	control.modulate.a = from_alpha
+	control.position.y += y_offset
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(control, "modulate:a", to_alpha, duration).set_delay(delay).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tween.tween_property(control, "position:y", control.position.y - y_offset, duration).set_delay(delay).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+
+func _preload_select_assets() -> void:
+	for character in characters:
+		_load_texture(character.get("select_animation_sheet", ""))
+		_load_texture(character.get("select_background_image", character.get("detail_image", "")))
+		_load_texture(character.get("detail_image", character.get("card_image", "")))
+	_prewarm_inactive_live_layer()
+
+
+func _prewarm_inactive_live_layer() -> void:
+	if characters.size() < 2 or live_animation_layers.size() < 2:
+		return
+	var next_character: Dictionary = characters[posmod(selected_index + 1, characters.size())]
+	var texture := _load_texture(next_character.get("select_animation_sheet", ""))
+	if texture == null:
+		return
+	var layer_index := 1 - active_live_animation
+	var layer: SheetAnimation = live_animation_layers[layer_index]
+	layer.modulate = Color(1.08, 1.08, 1.08, 0.0)
+	layer.set_animation_data(
+		texture,
+		int(next_character.get("select_animation_columns", 4)),
+		int(next_character.get("select_animation_rows", 6)),
+		float(next_character.get("select_animation_fps", 12.0)),
+		next_character.get("select_animation_mode", "cover"),
+		next_character.get("select_animation_focus", Vector2(0.5, 0.5))
+	)
 
 
 func _load_texture(path: String) -> Texture2D:
 	if path.is_empty():
 		return null
-
+	if texture_cache.has(path):
+		return texture_cache[path]
+	if GameState.has_method("get_preloaded_texture"):
+		var preloaded := GameState.get_preloaded_texture(path)
+		if preloaded != null:
+			texture_cache[path] = preloaded
+			return preloaded
 	if ResourceLoader.exists(path, "Texture2D"):
 		var texture := load(path) as Texture2D
 		if texture != null:
+			texture_cache[path] = texture
 			return texture
-
 	var image := Image.new()
 	if image.load(path) != OK:
 		return null
-	return ImageTexture.create_from_image(image)
-
-
-func _make_separator() -> HSeparator:
-	var separator := HSeparator.new()
-	separator.modulate = Color(0.74, 0.56, 0.34, 0.45)
-	return separator
-
-
-func _make_card_style(fill_color: Color, border_color: Color, border_width: int) -> StyleBoxFlat:
-	return _make_panel_style(fill_color, border_color, border_width, 4)
+	var texture := ImageTexture.create_from_image(image)
+	texture_cache[path] = texture
+	return texture
 
 
 func _make_panel_style(fill_color: Color, border_color: Color, border_width: int, radius: int) -> StyleBoxFlat:
@@ -1058,10 +1089,47 @@ func _make_panel_style(fill_color: Color, border_color: Color, border_width: int
 	style.border_color = border_color
 	style.set_border_width_all(border_width)
 	style.set_corner_radius_all(radius)
-	style.shadow_color = Color(0, 0, 0, 0.42)
-	style.shadow_size = 7
-	style.content_margin_left = 6
-	style.content_margin_top = 6
-	style.content_margin_right = 6
-	style.content_margin_bottom = 6
+	style.shadow_color = Color(0, 0, 0, 0.28)
+	style.shadow_size = 14
+	style.content_margin_left = 8
+	style.content_margin_top = 8
+	style.content_margin_right = 8
+	style.content_margin_bottom = 8
+	return style
+
+
+func _make_bar_style(fill_color: Color, border_color: Color, border_width: int, radius: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill_color
+	style.border_color = border_color
+	style.set_border_width_all(border_width)
+	style.set_corner_radius_all(radius)
+	return style
+
+
+func _make_glow_style(fill_color: Color, border_color: Color, glow_color: Color, glow_alpha: float) -> StyleBoxFlat:
+	var style := _make_panel_style(fill_color, border_color, 1, 34)
+	style.shadow_color = Color(glow_color.r, glow_color.g, glow_color.b, glow_alpha)
+	style.shadow_size = 24
+	style.shadow_offset = Vector2.ZERO
+	style.content_margin_left = 10
+	style.content_margin_top = 10
+	style.content_margin_right = 10
+	style.content_margin_bottom = 10
+	return style
+
+
+func _make_roster_card_style(fill_color: Color, border_color: Color, border_width: int, radius: int) -> StyleBoxFlat:
+	var style := _make_panel_style(fill_color, border_color, border_width, radius)
+	style.shadow_color = Color.TRANSPARENT
+	style.shadow_size = 0
+	style.shadow_offset = Vector2.ZERO
+	return style
+
+
+func _make_roster_hover_style(fill_color: Color, border_color: Color, glow_color: Color, glow_alpha: float) -> StyleBoxFlat:
+	var style := _make_roster_card_style(fill_color, border_color, 1, 36)
+	style.shadow_color = Color(glow_color.r, glow_color.g, glow_color.b, glow_alpha)
+	style.shadow_size = 10
+	style.shadow_offset = Vector2.ZERO
 	return style
